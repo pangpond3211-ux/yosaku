@@ -19,8 +19,9 @@ ORIFICE_DATA = [
     ("JF", 0.35), ("JG", 0.41), ("JH", 0.48)
 ]
 
+# ฟังก์ชันคำนวณคะแนนความเหมาะสม (อัปเดตเงื่อนไขใหม่)
 def get_suitability_score(pct, is_single):
-    if pct > 100:
+    if pct > 87:  # ⚠️ เกิน 87% ขึ้นไป ให้ตัดออกจาก Choice แนะนำทันที
         return -1
     penalty = 0 if is_single else 5
     return 100 - abs(85 - pct) - penalty
@@ -58,16 +59,16 @@ def color_matrix_cells(val):
 
 # ส่วนหัวของโปรแกรม (Header)
 st.title("🎯 Yosaku Selection")
-st.caption("พัฒนาโดย Chattrawat Khamsee | บริษัท มาเยคาว่า(ประเทศไทย)จำกัด")
+st.caption("พัฒนาโดย Chattrawat Khamsee | เวอร์ชัน Web App สำหรับมือถือ")
 
-# 📖 เพิ่มส่วนแสดงสมการและที่มา (พับเก็บได้เพื่อประหยัดพื้นที่บนมือถือ)
+# 📖 ส่วนแสดงสมการและที่มา (พับเก็บได้)
 with st.expander("📖 ดูสมการและทฤษฎีที่ใช้คำนวณ (Formula & Derivation)"):
     st.markdown("โปรแกรมนี้คำนวณหาค่าสัมประสิทธิ์การไหล ($C_v$) ของ Orifice ตามสูตรมาตรฐานวิศวกรรม:")
     st.latex(r"C_v = 1.17 \times \left( \frac{G}{1000 \times Y} \right) \times \sqrt{\frac{S}{\Delta P}} \times K")
     st.markdown("""
     **คำอธิบายตัวแปรตำแหน่งต่าง ๆ:**
-    * $\Delta P = HP - LP$ : ความดันตกคร่อมวาล์ว (Pressure Drop) ในหน่วย ${Bar}$ *(หากกรอกเป็น PSI ระบบจะแปลงเป็น Bar ให้โดยอัตโนมัติก่อนนำเข้าสูตร)*
-    * $G$ : อัตราการไหลมวล (Mass Flow Rate) $[{kg/h}]$
+    * $\Delta P = HP - LP$ : ความดันตกคร่อมวาล์ว (Pressure Drop) ในหน่วย $\text{Bar}$ *(หากกรอกเป็น PSI ระบบจะแปลงเป็น Bar ให้โดยอัตโนมัติก่อนนำเข้าสูตร)*
+    * $G$ : อัตราการไหลมวล (Mass Flow Rate) $[\text{kg/h}]$
     * $Y$ : ค่าการขยายตัว (Expansion Factor) กำหนดตายตัวที่ $0.583$
     * $S$ : ความถ่วงจำเพาะ (Specific Gravity) กำหนดตายตัวที่ $0.583$
     * $K$ : ค่าปรับแก้ (K Factor) ที่ได้จากการป้อนข้อมูลของผู้ใช้งาน
@@ -111,7 +112,7 @@ if st.button("🚀 CALCULATE", type="primary", use_container_width=True):
         res_col1.metric("Pressure Drop", f"{display_dp:.3f} {unit}")
         res_col2.metric("ผลรวมค่า CV ที่คำนวณได้", f"{cv_result:.4f}")
 
-        # --- 1. คำนวณหา Top 5 ทางเลือกที่ดีที่สุด ---
+        # --- 1. คำนวณหา Top 5 ทางเลือกที่ดีที่สุด (ภายใต้เงื่อนไขไม่เกิน 87%) ---
         all_options = []
         for name, max_cv in ORIFICE_DATA:
             pct = (cv_result / max_cv) * 100
@@ -129,7 +130,7 @@ if st.button("🚀 CALCULATE", type="primary", use_container_width=True):
 
         all_options.sort(key=lambda x: x[0], reverse=True)
         
-        st.success("🏆 **ชุดประกอบแนะนำที่ดีที่สุด 5 อันดับแรก (อิงความใกล้เคียง 85%)**")
+        st.success("🏆 **ชุดประกอบแนะนำที่ดีที่สุด 5 อันดับแรก (เข้าใกล้ 85% และไม่เกิน 87%)**")
         if all_options:
             recommendation_text = ""
             for i, (score, label) in enumerate(all_options[:5]):
@@ -137,17 +138,17 @@ if st.button("🚀 CALCULATE", type="primary", use_container_width=True):
                 recommendation_text += f"อันดับ {i+1}: {label}\n"
         else:
             qty_needed = math.ceil(cv_result / 0.48)
-            recommendation_text = f"เล็กเกินไปทั้งหมด -> แนะนำใช้ {qty_needed} x JH"
+            recommendation_text = f"ไม่มีชุดประกอบที่เปิดไม่เกิน 87% -> แนะนำใช้ขนานเพิ่มเป็น {qty_needed} x JH"
             st.error(f"⚠️ {recommendation_text}")
 
-        # ฟังก์ชันแปลงเปอร์เซ็นต์เป็นข้อความสถานะ
+        # ฟังก์ชันแปลงเปอร์เซ็นต์เป็นข้อความสถานะ (คงไว้สำหรับตารางอ้างอิงภาพรวม)
         def get_status_text(pct):
             if pct > 100: return "เล็กเกินไป"
             elif 75 <= pct <= 85: return "เหมาะสม"
             elif 85 < pct <= 100: return "ใกล้เต็ม"
             else: return "ใหญ่เกินไป"
 
-        # --- 2. สร้างตารางที่ 1 & 2พร้อมใส่สีไฮไลต์ ---
+        # --- 2. สร้างตารางที่ 1 & 2 พร้อมใส่สีไฮไลต์ ---
         st.subheader("📋 ตารางอ้างอิงสถานะแบบ 1 ตัว VS ขนาน 2 ตัวรุ่นเดียวกัน")
         baseline_rows = []
         for name, max_cv in ORIFICE_DATA:
