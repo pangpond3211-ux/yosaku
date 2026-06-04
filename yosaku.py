@@ -7,7 +7,7 @@ from datetime import datetime
 # ตั้งค่าหน้าตาของ Web App ให้เหมาะกับมือถือ
 st.set_page_config(
     page_title="Yosaku Selection",
-    page_icon="👨‍🔧",
+    page_icon="🎯",
     layout="centered",
     initial_sidebar_state="collapsed"
 )
@@ -19,9 +19,9 @@ ORIFICE_DATA = [
     ("JF", 0.35), ("JG", 0.41), ("JH", 0.48)
 ]
 
-# ฟังก์ชันคำนวณคะแนนความเหมาะสม (อัปเดตเงื่อนไขใหม่)
+# ฟังก์ชันคำนวณคะแนนความเหมาะสม (ไม่เกิน 87%)
 def get_suitability_score(pct, is_single):
-    if pct > 87:  # ⚠️ เกิน 87% ขึ้นไป ให้ตัดออกจาก Choice แนะนำทันที
+    if pct > 87:  
         return -1
     penalty = 0 if is_single else 5
     return 100 - abs(85 - pct) - penalty
@@ -58,24 +58,27 @@ def color_matrix_cells(val):
     else: return "background-color: #ffffff; color: #6c757d;"
 
 # ========================================================
-# ส่วนหัวของโปรแกรม (Header)
+# ส่วนหัวของโปรแกรม (Header) พร้อมระบบรองรับโลโก้เซฟตี้
 # ========================================================
-# แทรกบรรทัดนี้เพิ่มเข้าไป (ปรับขนาดความกว้างด้วย width ตามต้องการ)
-st.image("logo.png", width=150)
-st.title("💻⚙️ Yosaku Selection")
-st.caption("พัฒนาโดย Chattrawat Khamsee | Mayekawa (Thailand) CO.,LTD | เวอร์ชัน Web App สำหรับมือถือ")
+try:
+    st.image("logo.png", width=130)
+except:
+    pass # ถ้ายังไม่ได้อัปโหลดรูป logo.png ขึ้น GitHub โปรแกรมจะไม่พัง
 
-# 📖 ส่วนแสดงสมการและที่มา (พับเก็บได้)
+st.title("🎯 Yosaku Selection")
+st.caption("พัฒนาโดย Chattrawat Khamsee | เวอร์ชัน Web App สำหรับมือถือ")
+
+# 📖 ส่วนแสดงสมการและที่มา
 with st.expander("📖 ดูสมการและทฤษฎีที่ใช้คำนวณ (Formula & Derivation)"):
     st.markdown("โปรแกรมนี้คำนวณหาค่าสัมประสิทธิ์การไหล ($C_v$) ของ Orifice ตามสูตรมาตรฐานวิศวกรรม:")
     st.latex(r"C_v = 1.17 \times \left( \frac{G}{1000 \times Y} \right) \times \sqrt{\frac{S}{\Delta P}} \times K")
     st.markdown("""
     **คำอธิบายตัวแปรตำแหน่งต่าง ๆ:**
-    * $\Delta P = HP - LP$ : ความดันตกคร่อมวาล์ว (Pressure Drop) ในหน่วย ${Bar}$ *(หากกรอกเป็น PSI ระบบจะแปลงเป็น Bar ให้โดยอัตโนมัติก่อนนำเข้าสูตร)*
-    * $G$ : อัตราการไหลมวล (Mass Flow Rate) $[{kg/h}]$
-    * $Y$ : ค่าการขยายตัว (Expansion Factor) กำหนดตายตัวที่ $0.583$
-    * $S$ : ความถ่วงจำเพาะ (Specific Gravity) กำหนดตายตัวที่ $0.583$
-    * $K$ : ค่าปรับแก้ (K Factor) ที่ได้จากการป้อนข้อมูลของผู้ใช้งาน
+    * $\Delta P = HP - LP$ : ความดันตกคร่อมวาล์ว (Pressure Drop) ในหน่วย $\text{Bar}$
+    * $G$ : อัตราการไหลมวล (Mass Flow Rate) $[\text{kg/h}]$
+    * $Y$ : ค่าการขยายตัว (Expansion Factor) = $0.583$
+    * $S$ : ความถ่วงจำเพาะ (Specific Gravity) = $0.583$
+    * $K$ : ค่าปรับแก้ (K Factor) จากผู้ใช้
     """)
 
 # ส่วนรับข้อมูล (Inputs)
@@ -116,36 +119,53 @@ if st.button("🚀 CALCULATE", type="primary", use_container_width=True):
         res_col1.metric("Pressure Drop", f"{display_dp:.3f} {unit}")
         res_col2.metric("ผลรวมค่า CV ที่คำนวณได้", f"{cv_result:.4f}")
 
-        # --- 1. คำนวณหา Top 5 ทางเลือกที่ดีที่สุด (ภายใต้เงื่อนไขไม่เกิน 87%) ---
+        # --- 1. คำนวณหา Top 5 ทางเลือกที่ดีที่สุด (ดึงค่า % ออกมาแยกสลอต) ---
         all_options = []
         for name, max_cv in ORIFICE_DATA:
             pct = (cv_result / max_cv) * 100
             score = get_suitability_score(pct, is_single=True)
             if score > 0:
-                all_options.append((score, f"1 x {name} (เปิด {pct:.1f}%)"))
+                all_options.append((score, f"1 x {name}", pct))
                 
         for (name1, cv1), (name2, cv2) in itertools.combinations_with_replacement(ORIFICE_DATA, 2):
             total_cv = cv1 + cv2
             pct = (cv_result / total_cv) * 100
             score = get_suitability_score(pct, is_single=False)
             if score > 0:
-                label_text = f"2 x {name1} (เปิด {pct:.1f}%)" if name1 == name2 else f"1x {name1} + 1x {name2} (เปิดรวม {pct:.1f}%)"
-                all_options.append((score, label_text))
+                label_text = f"2 x {name1}" if name1 == name2 else f"1x {name1} + 1x {name2}"
+                all_options.append((score, label_text, pct))
 
         all_options.sort(key=lambda x: x[0], reverse=True)
         
-        st.success("🏆 **ชุดประกอบแนะนำที่ดีที่สุด 5 อันดับแรก (แนะนำที่ 80% - 85%)**")
+        st.success("🏆 **ชุดประกอบแนะนำที่ดีที่สุด 5 อันดับแรก (เข้าใกล้ 85% และไม่เกิน 87%)**")
         if all_options:
             recommendation_text = ""
-            for i, (score, label) in enumerate(all_options[:5]):
-                st.write(f"**อันดับ {i+1}:** {label}")
-                recommendation_text += f"อันดับ {i+1}: {label}\n"
+            chart_data = [] # เก็บข้อมูลไปวาดกราฟ
+            
+            for i, (score, label, pct) in enumerate(all_options[:5]):
+                full_label = f"{label} (เปิด {pct:.1f}%)"
+                st.write(f"**อันดับ {i+1}:** {full_label}")
+                recommendation_text += f"อันดับ {i+1}: {full_label}\n"
+                
+                # บันทึกข้อมูลลงลิสต์สำหรับสร้างกราฟ
+                chart_data.append({
+                    "ชุดประกอบแนะนำ": f"อันดับ {i+1}: {label}",
+                    "เปอร์เซ็นต์การเปิด (%)": pct
+                })
+            
+            # 📈 ส่วนแสดงกราฟเปรียบเทียบเปอร์เซ็นต์การเปิด
+            st.write("")
+            st.subheader("📈 กราฟเปรียบเทียบ % การเปิดของ 5 อันดับแรก")
+            df_chart = pd.DataFrame(chart_data)
+            # แสดงกราฟแท่งสีเขียวเพื่อให้แมตช์กับธีมวิศวกรรม
+            st.bar_chart(df_chart, x="ชุดประกอบแนะนำ", y="เปอร์เซ็นต์การเปิด (%)", color="#2e7d32")
+            
         else:
             qty_needed = math.ceil(cv_result / 0.48)
             recommendation_text = f"ไม่มีชุดประกอบที่เปิดไม่เกิน 87% -> แนะนำใช้ขนานเพิ่มเป็น {qty_needed} x JH"
             st.error(f"⚠️ {recommendation_text}")
 
-        # ฟังก์ชันแปลงเปอร์เซ็นต์เป็นข้อความสถานะ (คงไว้สำหรับตารางอ้างอิงภาพรวม)
+        # ฟังก์ชันแปลงเปอร์เซ็นต์เป็นข้อความสถานะ
         def get_status_text(pct):
             if pct > 100: return "เล็กเกินไป"
             elif 75 <= pct <= 85: return "เหมาะสม"
