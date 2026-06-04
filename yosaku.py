@@ -57,7 +57,11 @@ def color_matrix_cells(val):
     elif 85 < val <= 100: return "background-color: #fff3cd; color: #856404;"
     else: return "background-color: #ffffff; color: #6c757d;"
 
+# ========================================================
 # ส่วนหัวของโปรแกรม (Header)
+# ========================================================
+# แทรกบรรทัดนี้เพิ่มเข้าไป (ปรับขนาดความกว้างด้วย width ตามต้องการ)
+st.image("logo.png", width=150)
 st.title("🎯 Yosaku Selection")
 st.caption("พัฒนาโดย Chattrawat Khamsee | เวอร์ชัน Web App สำหรับมือถือ")
 
