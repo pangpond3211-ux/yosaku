@@ -25,11 +25,9 @@ def get_suitability_score(pct, is_single):
     penalty = 0 if is_single else 5
     return 100 - abs(85 - pct) - penalty
 
-# ฟังก์ชันช่วยกำหนดสไตล์สีสำหรับตาราง Baseline (ตารางที่ 1 & 2)
 def style_baseline_df(df):
     styles = pd.DataFrame('', index=df.index, columns=df.columns)
     for i, row in df.iterrows():
-        # สีของกรณี 1 ตัว
         s1 = row["สถานะ (1 ตัว)"]
         style1 = {
             "เล็กเกินไป": "background-color: #ffcccc; color: #cc0000;",
@@ -40,7 +38,6 @@ def style_baseline_df(df):
         styles.at[i, "% เปิด (1 ตัว)"] = style1
         styles.at[i, "สถานะ (1 ตัว)"] = style1
         
-        # สีของกรณี 2 ตัว
         s2 = row["สถานะ (2 ตัว)"]
         style2 = {
             "เล็กเกินไป": "background-color: #ffcccc; color: #cc0000;",
@@ -52,7 +49,6 @@ def style_baseline_df(df):
         styles.at[i, "สถานะ (2 ตัว)"] = style2
     return styles
 
-# ฟังก์ชันช่วยกำหนดสไตล์สีสำหรับตาราง Matrix คละรุ่น (ตารางที่ 3)
 def color_matrix_cells(val):
     if pd.isna(val): return ""
     if val > 100: return "background-color: #ffcccc; color: #cc0000;"
@@ -63,6 +59,19 @@ def color_matrix_cells(val):
 # ส่วนหัวของโปรแกรม (Header)
 st.title("🎯 Yosaku Selection")
 st.caption("พัฒนาโดย Chattrawat Khamsee | เวอร์ชัน Web App สำหรับมือถือ")
+
+# 📖 เพิ่มส่วนแสดงสมการและที่มา (พับเก็บได้เพื่อประหยัดพื้นที่บนมือถือ)
+with st.expander("📖 ดูสมการและทฤษฎีที่ใช้คำนวณ (Formula & Derivation)"):
+    st.markdown("โปรแกรมนี้คำนวณหาค่าสัมประสิทธิ์การไหล ($C_v$) ของ Orifice ตามสูตรมาตรฐานวิศวกรรม:")
+    st.latex(r"C_v = 1.17 \times \left( \frac{G}{1000 \times Y} \right) \times \sqrt{\frac{S}{\Delta P}} \times K")
+    st.markdown("""
+    **คำอธิบายตัวแปรตำแหน่งต่าง ๆ:**
+    * $\Delta P = HP - LP$ : ความดันตกคร่อมวาล์ว (Pressure Drop) ในหน่วย $\text{Bar}$ *(หากกรอกเป็น PSI ระบบจะแปลงเป็น Bar ให้โดยอัตโนมัติก่อนนำเข้าสูตร)*
+    * $G$ : อัตราการไหลมวล (Mass Flow Rate) $[\text{kg/h}]$
+    * $Y$ : ค่าการขยายตัว (Expansion Factor) กำหนดตายตัวที่ $0.583$
+    * $S$ : ความถ่วงจำเพาะ (Specific Gravity) กำหนดตายตัวที่ $0.583$
+    * $K$ : ค่าปรับแก้ (K Factor) ที่ได้จากการป้อนข้อมูลของผู้ใช้งาน
+    """)
 
 # ส่วนรับข้อมูล (Inputs)
 unit = st.radio("เลือกหน่วยความดัน:", ["Bar", "PSI"], horizontal=True)
@@ -152,7 +161,6 @@ if st.button("🚀 CALCULATE", type="primary", use_container_width=True):
             })
             
         df_base = pd.DataFrame(baseline_rows)
-        # สั่งย้อมสีผ่าน .style และฟอร์แมตตัวเลข % ไปพร้อมกัน
         styled_base = df_base.style.apply(style_baseline_df, axis=None).format({
             "% เปิด (1 ตัว)": "{:.1f}%",
             "% เปิด (2 ตัว)": "{:.1f}%"
@@ -169,7 +177,6 @@ if st.button("🚀 CALCULATE", type="primary", use_container_width=True):
                 matrix_dict[name1][name2] = pct
                 
         df_matrix = pd.DataFrame(matrix_dict).T
-        # สั่งย้อมสีตารางเมทริกซ์ตามเงื่อนไขตัวเลข
         styled_matrix = df_matrix.style.map(color_matrix_cells).format("{:.1f}%")
         st.dataframe(styled_matrix, use_container_width=True)
 
