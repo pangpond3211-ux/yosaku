@@ -63,7 +63,7 @@ def color_matrix_cells(val):
 # แทรกบรรทัดนี้เพิ่มเข้าไป (ปรับขนาดความกว้างด้วย width ตามต้องการ)
 st.image("logo.png", width=150)
 st.title("💻⚙️ Yosaku Selection")
-st.caption("พัฒนาโดย Chattrawat Khamsee | เวอร์ชัน Web App สำหรับมือถือ")
+st.caption("พัฒนาโดย Chattrawat Khamsee | Mayekawa (Thailand) CO.,LTD | เวอร์ชัน Web App สำหรับมือถือ")
 
 # 📖 ส่วนแสดงสมการและที่มา (พับเก็บได้)
 with st.expander("📖 ดูสมการและทฤษฎีที่ใช้คำนวณ (Formula & Derivation)"):
