@@ -134,7 +134,7 @@ if st.button("🚀 CALCULATE", type="primary", use_container_width=True):
 
         all_options.sort(key=lambda x: x[0], reverse=True)
         
-        st.success("🏆 **ชุดประกอบแนะนำที่ดีที่สุด 5 อันดับแรก (เข้าใกล้ 85% และไม่เกิน 87%)**")
+        st.success("🏆 **ชุดประกอบแนะนำที่ดีที่สุด 5 อันดับแรก (แนะนำที่ 80% - 85%)**")
         if all_options:
             recommendation_text = ""
             for i, (score, label) in enumerate(all_options[:5]):
