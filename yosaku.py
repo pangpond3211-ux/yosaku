@@ -25,6 +25,41 @@ def get_suitability_score(pct, is_single):
     penalty = 0 if is_single else 5
     return 100 - abs(85 - pct) - penalty
 
+# ฟังก์ชันช่วยกำหนดสไตล์สีสำหรับตาราง Baseline (ตารางที่ 1 & 2)
+def style_baseline_df(df):
+    styles = pd.DataFrame('', index=df.index, columns=df.columns)
+    for i, row in df.iterrows():
+        # สีของกรณี 1 ตัว
+        s1 = row["สถานะ (1 ตัว)"]
+        style1 = {
+            "เล็กเกินไป": "background-color: #ffcccc; color: #cc0000;",
+            "เหมาะสม": "background-color: #d4edda; color: #155724; font-weight: bold;",
+            "ใกล้เต็ม": "background-color: #fff3cd; color: #856404;",
+            "ใหญ่เกินไป": "background-color: #ffffff; color: #6c757d;"
+        }.get(s1, "")
+        styles.at[i, "% เปิด (1 ตัว)"] = style1
+        styles.at[i, "สถานะ (1 ตัว)"] = style1
+        
+        # สีของกรณี 2 ตัว
+        s2 = row["สถานะ (2 ตัว)"]
+        style2 = {
+            "เล็กเกินไป": "background-color: #ffcccc; color: #cc0000;",
+            "เหมาะสม": "background-color: #d4edda; color: #155724; font-weight: bold;",
+            "ใกล้เต็ม": "background-color: #fff3cd; color: #856404;",
+            "ใหญ่เกินไป": "background-color: #ffffff; color: #6c757d;"
+        }.get(s2, "")
+        styles.at[i, "% เปิด (2 ตัว)"] = style2
+        styles.at[i, "สถานะ (2 ตัว)"] = style2
+    return styles
+
+# ฟังก์ชันช่วยกำหนดสไตล์สีสำหรับตาราง Matrix คละรุ่น (ตารางที่ 3)
+def color_matrix_cells(val):
+    if pd.isna(val): return ""
+    if val > 100: return "background-color: #ffcccc; color: #cc0000;"
+    elif 75 <= val <= 85: return "background-color: #d4edda; color: #155724; font-weight: bold;"
+    elif 85 < val <= 100: return "background-color: #fff3cd; color: #856404;"
+    else: return "background-color: #ffffff; color: #6c757d;"
+
 # ส่วนหัวของโปรแกรม (Header)
 st.title("🎯 Yosaku Selection")
 st.caption("พัฒนาโดย Chattrawat Khamsee | เวอร์ชัน Web App สำหรับมือถือ")
@@ -96,38 +131,47 @@ if st.button("🚀 CALCULATE", type="primary", use_container_width=True):
             recommendation_text = f"เล็กเกินไปทั้งหมด -> แนะนำใช้ {qty_needed} x JH"
             st.error(f"⚠️ {recommendation_text}")
 
-        # ฟังก์ชันกำหนดสถานะและสี
-        def get_status_and_color(pct):
-            if pct > 100: return "เล็กเกินไป", "background-color: #ffcccc; color: #cc0000;"
-            elif 75 <= pct <= 85: return "เหมาะสม", "background-color: #d4edda; color: #155724;"
-            elif 85 < pct <= 100: return "ใกล้เต็ม", "background-color: #fff3cd; color: #856404;"
-            else: return "ใหญ่เกินไป", "background-color: #ffffff; color: #495057;"
+        # ฟังก์ชันแปลงเปอร์เซ็นต์เป็นข้อความสถานะ
+        def get_status_text(pct):
+            if pct > 100: return "เล็กเกินไป"
+            elif 75 <= pct <= 85: return "เหมาะสม"
+            elif 85 < pct <= 100: return "ใกล้เต็ม"
+            else: return "ใหญ่เกินไป"
 
-        # --- 2. สร้างตารางที่ 1 & 2: Baseline ---
+        # --- 2. สร้างตารางที่ 1 & 2พร้อมใส่สีไฮไลต์ ---
         st.subheader("📋 ตารางอ้างอิงสถานะแบบ 1 ตัว VS ขนาน 2 ตัวรุ่นเดียวกัน")
         baseline_rows = []
         for name, max_cv in ORIFICE_DATA:
             pct1 = (cv_result / max_cv) * 100
-            status1, _ = get_status_and_color(pct1)
             pct2 = (cv_result / (max_cv * 2)) * 100
-            status2, _ = get_status_and_color(pct2)
             
             baseline_rows.append({
                 "Orifice": name, "Max Cv": max_cv,
-                "% เปิด (1 ตัว)": f"{pct1:.1f}%", "สถานะ (1 ตัว)": status1,
-                "% เปิด (2 ตัว)": f"{pct2:.1f}%", "สถานะ (2 ตัว)": status2
+                "% เปิด (1 ตัว)": pct1, "สถานะ (1 ตัว)": get_status_text(pct1),
+                "% เปิด (2 ตัว)": pct2, "สถานะ (2 ตัว)": get_status_text(pct2)
             })
-        st.dataframe(pd.DataFrame(baseline_rows), use_container_width=True, hide_index=True)
+            
+        df_base = pd.DataFrame(baseline_rows)
+        # สั่งย้อมสีผ่าน .style และฟอร์แมตตัวเลข % ไปพร้อมกัน
+        styled_base = df_base.style.apply(style_baseline_df, axis=None).format({
+            "% เปิด (1 ตัว)": "{:.1f}%",
+            "% เปิด (2 ตัว)": "{:.1f}%"
+        })
+        st.dataframe(styled_base, use_container_width=True, hide_index=True)
 
-        # --- 3. สร้างตารางที่ 3: เมทริกซ์การคละรุ่น (Matrix) ---
+        # --- 3. สร้างตารางที่ 3: เมทริกซ์การคละรุ่น พร้อมใส่สีไฮไลต์ ---
         st.subheader("🗺️ ตารางวิเคราะห์เปอร์เซ็นต์เปิดรวม แบบจับคู่คละรุ่น 2 ตัว")
-        matrix_data = {}
+        matrix_dict = {}
         for name1, cv1 in ORIFICE_DATA:
-            matrix_data[name1] = {}
+            matrix_dict[name1] = {}
             for name2, cv2 in ORIFICE_DATA:
                 pct = (cv_result / (cv1 + cv2)) * 100
-                matrix_data[name1][name2] = f"{pct:.1f}%"
-        st.dataframe(pd.DataFrame(matrix_data), use_container_width=True)
+                matrix_dict[name1][name2] = pct
+                
+        df_matrix = pd.DataFrame(matrix_dict).T
+        # สั่งย้อมสีตารางเมทริกซ์ตามเงื่อนไขตัวเลข
+        styled_matrix = df_matrix.style.map(color_matrix_cells).format("{:.1f}%")
+        st.dataframe(styled_matrix, use_container_width=True)
 
         # --- 4. ระบบดาวน์โหลด Log สำหรับมือถือ ---
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
