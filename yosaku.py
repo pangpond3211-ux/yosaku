@@ -71,8 +71,8 @@ with st.expander("📖 ดูสมการและทฤษฎีที่ใ
     st.latex(r"C_v = 1.17 \times \left( \frac{G}{1000 \times Y} \right) \times \sqrt{\frac{S}{\Delta P}} \times K")
     st.markdown("""
     **คำอธิบายตัวแปรตำแหน่งต่าง ๆ:**
-    * $\Delta P = HP - LP$ : ความดันตกคร่อมวาล์ว (Pressure Drop) ในหน่วย $\text{Bar}$ *(หากกรอกเป็น PSI ระบบจะแปลงเป็น Bar ให้โดยอัตโนมัติก่อนนำเข้าสูตร)*
-    * $G$ : อัตราการไหลมวล (Mass Flow Rate) $[\text{kg/h}]$
+    * $\Delta P = HP - LP$ : ความดันตกคร่อมวาล์ว (Pressure Drop) ในหน่วย ${Bar}$ *(หากกรอกเป็น PSI ระบบจะแปลงเป็น Bar ให้โดยอัตโนมัติก่อนนำเข้าสูตร)*
+    * $G$ : อัตราการไหลมวล (Mass Flow Rate) $[{kg/h}]$
     * $Y$ : ค่าการขยายตัว (Expansion Factor) กำหนดตายตัวที่ $0.583$
     * $S$ : ความถ่วงจำเพาะ (Specific Gravity) กำหนดตายตัวที่ $0.583$
     * $K$ : ค่าปรับแก้ (K Factor) ที่ได้จากการป้อนข้อมูลของผู้ใช้งาน
