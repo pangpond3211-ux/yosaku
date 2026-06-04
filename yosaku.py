@@ -7,7 +7,7 @@ from datetime import datetime
 # ตั้งค่าหน้าตาของ Web App ให้เหมาะกับมือถือ
 st.set_page_config(
     page_title="Yosaku Selection",
-    page_icon="🎯",
+    page_icon="👨‍🔧",
     layout="centered",
     initial_sidebar_state="collapsed"
 )
