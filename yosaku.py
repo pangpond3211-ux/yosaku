@@ -70,7 +70,7 @@ else:
 st.title("💻⚙️ Yosaku Selection")
 st.caption("พัฒนาโดย Chattrawat Khamsee | เวอร์ชัน Web App สำหรับมือถือ")
 
-# 📖 ส่วนแสดงสมการหลัก (เปิดเผยบนหน้าจอโดยตรง)
+# 📖 ส่วนแสดงสมการหลัก
 st.markdown("### 📊 สมการอ้างอิงการคำนวณ (Formula)")
 st.latex(r"C_v = 1.17 \times \left( \frac{G}{1000 \times Y} \right) \times \sqrt{\frac{S}{HP - LP}} \times K")
 
@@ -89,7 +89,6 @@ st.markdown("---")
 st.subheader("📋 กรอกข้อมูลคุณสมบัติระบบ")
 col_g1, col_g2 = st.columns(2)
 with col_g1:
-    # อัปเดต Label ของค่า G ให้ตรงตาม Remark ในใบสเปก
     G = st.number_input("G: Ref. flow rate [Suction] (kg/hr):", min_value=0.0, value=1000.0, step=10.0)
     Y = st.number_input("Y: Specific weight before valve:", min_value=0.01, value=0.583, step=0.01, format="%.3f")
 with col_g2:
@@ -101,20 +100,26 @@ st.markdown("---")
 # 🔘 ส่วนเลือกวิธีการป้อนสภาวะความดัน
 input_mode = st.radio(
     "เลือกวิธีระบุสภาวะความดัน:",
-    ["วิธีที่ 1: ป้อนด้วยความดันโดยตรง (HP / LP)", "วิธีที่ 2: ป้อนด้วยอุณหภูมิแอมโมเนีย (Tc / Te)"],
+    ["วิธีที่ 1: ป้อนด้วยความดันเกจโดยตรง (HP / LP)", "วิธีที่ 2: ป้อนด้วยอุณหภูมิแอมโมเนีย (Tc / Te)"],
     horizontal=False
 )
 
 unit = st.radio("เลือกหน่วยความดันแสดงผล:", ["Bar", "PSI"], horizontal=True)
 
-# กำหนดตัวแปรสำหรับรับค่าตามโหมด
+# [MODIFIED] เปลี่ยนเป็นหน่วย Gauge และตั้งค่าเริ่มต้นให้เหมาะกับระบบ Ammonia จริง
+p_label = "Bar G" if unit == "Bar" else "PSI G"
+min_p = -1.013 if unit == "Bar" else -14.70  # รองรับสภาวะ Vacuum (ติดลบ)
+hp_default = 13.65 if unit == "Bar" else 198.0  # ประมาณ 38°C ของ R717
+lp_default = 1.90 if unit == "Bar" else 27.5     # ประมาณ -10°C ของ R717
+p_step = 0.1 if unit == "Bar" else 1.0
+
 col1, col2 = st.columns(2)
 
-if input_mode == "วิธีที่ 1: ป้อนด้วยความดันโดยตรง (HP / LP)":
+if input_mode == "วิธีที่ 1: ป้อนด้วยความดันเกจโดยตรง (HP / LP)":
     with col1:
-        HP_input = st.number_input("ความดันขาเข้า HP (abs):", min_value=0.0, value=14.7, step=0.1)
+        HP_input = st.number_input(f"ความดันขาเข้า HP ({p_label}):", min_value=min_p, value=hp_default, step=p_step, format="%.3f")
     with col2:
-        LP_input = st.number_input("ความดันขาออก LP (abs):", min_value=0.0, value=2.91, step=0.1)
+        LP_input = st.number_input(f"ความดันขาออก LP ({p_label}):", min_value=min_p, value=lp_default, step=p_step, format="%.3f")
 else:
     with col1:
         Cond_temp = st.number_input("อุณหภูมิควบแน่น Condensing Temp Tc (°C):", min_value=-50.0, max_value=60.0, value=38.0, step=1.0)
@@ -123,10 +128,14 @@ else:
 
 # ปุ่มคำนวณ
 if st.button("🚀 CALCULATE", type="primary", use_container_width=True):
-    # ประมวลผลหาค่า HP และ LP ในหน่วย Bar (Absolute)
-    if input_mode == "วิธีที่ 1: ป้อนด้วยความดันโดยตรง (HP / LP)":
-        HP = HP_input / 14.5038 if unit == "PSI" else HP_input
-        LP = LP_input / 14.5038 if unit == "PSI" else LP_input
+    # [MODIFIED] แปลงจาก Gauge ให้เป็น Bar Absolute สำหรับใช้คำนวณในสูตรหลัก
+    if input_mode == "วิธีที่ 1: ป้อนด้วยความดันเกจโดยตรง (HP / LP)":
+        if unit == "PSI":
+            HP = (HP_input + 14.7) / 14.5038
+            LP = (LP_input + 14.7) / 14.5038
+        else:
+            HP = HP_input + 1.013
+            LP = LP_input + 1.013
     else:
         HP = nh3_temp_to_bar_abs(Cond_temp)
         LP = nh3_temp_to_bar_abs(Evap_temp)
@@ -137,7 +146,7 @@ if st.button("🚀 CALCULATE", type="primary", use_container_width=True):
     elif HP <= LP:
         st.error("❌ ข้อผิดพลาด: ความดันขาเข้า (HP) ต้องมากกว่าความดันขาออก (LP)")
     else:
-        # [FIXED BUG]: เปลี่ยนจาก IP เป็น LP เรียบร้อยครับ
+        # ค่า Pressure Drop คำนวณจากเกจหรือสัมบูรณ์ก็จะได้ค่าเท่ากัน
         display_dp = (HP - LP) * 14.5038 if unit == "PSI" else (HP - LP)
         
         # สูตรหลักคำนวณ Cv
@@ -151,7 +160,10 @@ if st.button("🚀 CALCULATE", type="primary", use_container_width=True):
         res_col1.metric("Pressure Drop", f"{display_dp:.3f} {unit}")
         res_col2.metric("ผลรวมค่า CV ที่คำนวณได้", f"{cv_result:.4f}")
         
-        st.info(f"💡 **ค่าในระบบ:** G = {G} kg/hr | HP = {HP:.3f} Bar A | LP = {LP:.3f} Bar A (Y={Y}, S={S})")
+        # แสดงค่าแปลงกลับเป็นเกจเพื่อให้ตรวจสอบหน้างานง่าย
+        hp_g_show = (HP * 14.5038) - 14.7 if unit == "PSI" else HP - 1.013
+        lp_g_show = (LP * 14.5038) - 14.7 if unit == "PSI" else LP - 1.013
+        st.info(f"💡 **สภาวะในระบบ:** G = {G} kg/hr | HP = {hp_g_show:.3f} {p_label} | LP = {lp_g_show:.3f} {p_label} (Y={Y}, S={S})")
 
         # --- 1. คำนวณหา Top 5 ทางเลือกที่ดีที่สุด ---
         all_options = []
@@ -212,6 +224,8 @@ if st.button("🚀 CALCULATE", type="primary", use_container_width=True):
 
         # --- 3. สร้างตารางที่ 3: เมทริกซ์การคละรุ่น ---
         st.subheader("🗺️ ตารางวิเคราะห์เปอร์เซ็นต์เปิดรวม แบบจับคู่คละรุ่น 2 ตัว")
+        st.caption("📱 *สำหรับผู้ใช้งานมือถือ: สามารถใช้นิ้วปัดขวาที่ตัวตารางเพื่อเลื่อนดู Orifice รุ่นอื่น ๆ ได้*")
+        
         matrix_dict = {}
         for name1, cv1 in ORIFICE_DATA:
             matrix_dict[name1] = {}
@@ -220,7 +234,12 @@ if st.button("🚀 CALCULATE", type="primary", use_container_width=True):
                 matrix_dict[name1][name2] = pct
                 
         df_matrix = pd.DataFrame(matrix_dict).T
-        styled_matrix = df_matrix.style.map(color_matrix_cells).format("{:.1f}%")
+        
+        try:
+            styled_matrix = df_matrix.style.map(color_matrix_cells).format("{:.1f}%")
+        except AttributeError:
+            styled_matrix = df_matrix.style.applymap(color_matrix_cells).format("{:.1f}%")
+            
         st.dataframe(styled_matrix, use_container_width=True)
 
         # --- 4. ระบบดาวน์โหลด Log ---
@@ -229,7 +248,8 @@ if st.button("🚀 CALCULATE", type="primary", use_container_width=True):
             f"=== บันทึกเมื่อ {current_time} ===\n"
             f"วิธีป้อนข้อมูล: {input_mode}\n"
             f"Ref. flow rate G: {G} kg/h (Suction from Compressor)\n"
-            f"ความดันคำนวณจริง: HP={HP:.3f} Bar A, LP={LP:.3f} Bar A\n"
+            f"ความดันที่ป้อนหน้างาน: HP={hp_g_show:.3f} {p_label}, LP={lp_g_show:.3f} {p_label}\n"
+            f"ความดันคำนวณจริงเบื้องหลัง: HP={HP:.3f} Bar A, LP={LP:.3f} Bar A\n"
             f"ค่าสัมประสิทธิ์ที่ใช้: Y={Y}, S={S}, K={K}\n"
             f"ผลลัพธ์ค่า CV วาล์วที่คำนวณได้: {cv_result:.4f}\n"
             f"--- ทางเลือกที่เหมาะสมที่สุด (Top 5) ---\n"
