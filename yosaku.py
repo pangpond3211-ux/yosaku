@@ -20,9 +20,10 @@ ORIFICE_DATA = [
     ("JF", 0.35), ("JG", 0.41), ("JH", 0.48)
 ]
 
-# ล็อกค่าคงที่ (Fixed Constants) ตามมาตรฐานของระบบ ไม่ให้แก้ไขบนหน้าจอ
+# ล็อกค่าคงที่ (Fixed Constants) ตามมาตรฐานของระบบ
 Y_CONSTANT = 0.583
 S_CONSTANT = 0.583
+P_ATM = 1.013  # ค่าความดันบรรยากาศมาตรฐาน (Bar) สำหรับแปลง Gauge เป็น Absolute
 
 # สไตล์สีสำหรับตารางสถานะ
 COLOR_MAP = {
@@ -72,9 +73,9 @@ else:
     st.caption("⚙️ Mayekawa (Thailand) Co., Ltd.")
 
 st.title("💻⚙️ Yosaku Selection")
-st.caption("พัฒนาโดย Chattrawat Khamsee | เวอร์ชันล็อกค่าคงที่เสถียรสูง")
+st.caption("พัฒนาโดย Chattrawat Khamsee | เวอร์ชันความดันเกจ (Bar gauge)")
 
-# 📖 ส่วนแสดงสมการหลักและคำอธิบายตัวแปรแบบละเอียดครบถ้วน
+# 📖 ส่วนแสดงสมการหลักและคำอธิบายตัวแปรแบบเกจ
 st.markdown("### 📊 สมการและตัวแปรอ้างอิงการคำนวณทั้งหมด (Reference Formulas)")
 
 st.markdown("**1. สมการหลักในการหาค่า Cv ของวาล์ว:**")
@@ -89,20 +90,20 @@ st.markdown("""
 * **$G$** : Refrigerant Flow Rate (อัตราการไหลเชิงมวลของสารทำความเย็น มีหน่วยเป็น **kg/hr**)
 * **$Y$** : Specific weight before valve (น้ำหนักจำเพาะก่อนเข้าวาล์ว -> 🔒 *ล็อกค่าคงที่ที่ 0.583*)
 * **$S$** : Specific weight after valve (น้ำหนักจำเพาะหลังออกจากวาล์ว -> 🔒 *ล็อกค่าคงที่ที่ 0.583*)
-* **$HP$** : High Pressure / Inlet Pressure (ความดันสัมบูรณ์ขาเข้าวาล์ว มีหน่วยเป็น **Bar A**)
-* **$LP$** : Low Pressure / Outlet Pressure (ความดันสัมบูรณ์ขาออกวาล์ว มีหน่วยเป็น **Bar A**)
+* **$HP$** : High Pressure / Inlet Pressure (ความดันขาเข้าวาล์ว มีหน่วยเป็น **Bar gauge** หรือ **psig**)
+* **$LP$** : Low Pressure / Outlet Pressure (ความดันขาออกวาล์ว มีหน่วยเป็น **Bar gauge** หรือ **psig**)
 * **$HP - LP$** : Pressure Drop (ผลต่างความดันตกคร่อมตัววาล์ว)
 * **$K$** : Correction Factor (ค่าปรับแก้สภาวะการทำงานของวาล์ว หรือ K Factor)
 * **$SV$** : Swept Volume (ปริมาตรกวาดตามทฤษฎีของคอมเพรสเซอร์ มีหน่วยเป็น **m³/hr**)
 * **$\eta_v$** : Volumetric Efficiency (ประสิทธิภาพเชิงปริมาตรของคอมเพรสเซอร์ มีหน่วยเป็น **%**)
-* **$P_s$** : Suction Absolute Pressure (ความดันสัมบูรณ์ทางดูด มีหน่วยเป็น **kPa A** โดยระบบจะดึงค่าจาก $LP$ มาแปลงหน่วยให้อัตโนมัติ)
+* **$P_s$** : Suction Absolute Pressure (ความดันสัมบูรณ์ทางดูด มีหน่วยเป็น **kPa A** โดยระบบจะนำค่าจากช่องป้อนความดันเกด $P_s$ บวกด้วย $1.013$ แล้วคูณ $100$ เพื่อแปลงหน่วยเข้าสูตรให้โดยอัตโนมัติ)
 * **$T_s$** : Suction Temperature (อุณหภูมิแก๊สทางดูดสัมบูรณ์ มีหน่วยเป็นเคลวิน **K** คำนวณมาจาก $\text{°C} + 273.15$)
 """)
 
 st.markdown("---")
 
 # ========================================================
-# 📋 ส่วนกรอกข้อมูลคุณสมบัติระบบ (ถอด Y และ S ออกแล้ว)
+# 📋 ส่วนกรอกข้อมูลคุณสมบัติระบบ
 # ========================================================
 st.subheader("📋 กรอกข้อมูลคุณสมบัติระบบ")
 
@@ -122,8 +123,9 @@ if g_mode == "ป้อนค่า G โดยตรง (kg/hr)":
 else:
     with col_g1:
         SV = st.number_input("SV: Swept Volume (m³/hr):", min_value=0.0, value=435.0, step=5.0)
-        # อัปเดตค่าเริ่มต้นตามโจทย์เป็น 93.0%
         eta_v = st.number_input("ηv: Volumetric Efficiency (%):", min_value=0.0, max_value=100.0, value=93.0, step=1.0)
+        # เพิ่มช่องกรอกสเปกความดัน Ps แยกอิสระตามคำขอ
+        Ps_gauge_input = st.number_input("Ps: Suction Pressure (Bar gauge):", min_value=-1.013, value=1.2, step=0.1, help="ความดันเกจฝั่งทางดูดของคอมเพรสเซอร์")
     with col_g2:
         T_s_c = st.number_input("Ts: Suction Temp (°C):", min_value=-50.0, max_value=100.0, value=-5.0, step=1.0, help="อุณหภูมิแก๊สจริงทางดูดรวม Superheat")
         K = st.number_input("ค่าปรับแก้ K Factor:", min_value=0.0, value=1.0, step=0.1)
@@ -137,16 +139,17 @@ input_mode = st.radio(
     horizontal=False
 )
 
-unit = st.radio("เลือกหน่วยความดันแสดงผล:", ["Bar", "PSI"], horizontal=True)
+unit = st.radio("เลือกหน่วยความดันแสดงผลบนหน้าจอ:", ["Bar", "PSI"], horizontal=True)
 
-# กำหนดตัวแปรสำหรับรับค่าตามโหมด
+# กำหนดตัวแปรสำหรับรับค่าตามโหมด (ปรับเป็น Gauge ทั้งหมด)
 col1, col2 = st.columns(2)
+label_suffix = "(psig)" if unit == "PSI" else "(gauge)"
 
 if input_mode == "วิธีที่ 1: ป้อนด้วยความดันโดยตรง (HP / LP)":
     with col1:
-        HP_input = st.number_input("ความดันขาเข้า HP (abs):", min_value=0.0, value=14.7, step=0.1)
+        HP_input = st.number_input(f"ความดันขาเข้า HP {label_suffix}:", min_value=-1.013, value=13.7 if unit == "Bar" else 198.7, step=0.1)
     with col2:
-        LP_input = st.number_input("ความดันขาออก LP (abs):", min_value=0.0, value=2.91, step=0.1)
+        LP_input = st.number_input(f"ความดันขาออก LP {label_suffix}:", min_value=-1.013, value=1.9 if unit == "Bar" else 27.5, step=0.1)
 else:
     with col1:
         Cond_temp = st.number_input("อุณหภูมิควบแน่น Condensing Temp Tc (°C):", min_value=-50.0, max_value=60.0, value=38.0, step=1.0)
@@ -157,45 +160,59 @@ else:
 # ปุ่มคำนวณและประมวลผลลัพธ์
 # ========================================================
 if st.button("🚀 CALCULATE", type="primary", use_container_width=True):
-    # 1. ประมวลผลหาค่า HP และ LP ในหน่วย Bar (Absolute)
+    # 1. แปลงความดันฝั่งใช้งานให้กลายเป็นหน่วย Bar Absolute (เพื่อใช้ในสูตรคณิตศาสตร์หลัก)
     if input_mode == "วิธีที่ 1: ป้อนด้วยความดันโดยตรง (HP / LP)":
-        HP = HP_input / 14.5038 if unit == "PSI" else HP_input
-        LP = LP_input / 14.5038 if unit == "PSI" else LP_input
+        if unit == "PSI":
+            HP_gauge = HP_input / 14.5038
+            LP_gauge = LP_input / 14.5038
+        else:
+            HP_gauge = HP_input
+            LP_gauge = LP_input
+        HP_abs = HP_gauge + P_ATM
+        LP_abs = LP_gauge + P_ATM
     else:
-        HP = nh3_temp_to_bar_abs(Cond_temp)
-        LP = nh3_temp_to_bar_abs(Evap_temp)
+        # ฟังก์ชันคำนวณอุณหภูมิคืนค่ามาเป็นความดันสัมบูรณ์ (Bar A)
+        HP_abs = nh3_temp_to_bar_abs(Cond_temp)
+        LP_abs = nh3_temp_to_bar_abs(Evap_temp)
+        HP_gauge = HP_abs - P_ATM
+        LP_gauge = LP_abs - P_ATM
 
     # 2. คำนวณหาค่า G ตามโหมดที่เลือก
     if g_mode == "ป้อนค่า G โดยตรง (kg/hr)":
         G = G_input
     else:
-        Ps_kpa = LP * 100.0      # เปลี่ยน Bar A เป็น kPa A สอดคล้องกับตัวแปรสูตร
-        Ts_k = T_s_c + 273.15    # เปลี่ยน เซลเซียส เป็น เคลวิน
+        # แปลงค่า Ps จากช่องกรอก Bar gauge -> kPa Absolute เพื่อเข้าสูตรคอมเพรสเซอร์
+        Ps_abs_bar = Ps_gauge_input + P_ATM
+        Ps_kpa = Ps_abs_bar * 100.0
+        Ts_k = T_s_c + 273.15
         G = (SV * (eta_v / 100.0) * Ps_kpa) / (0.4882 * Ts_k)
 
-    # ตรวจสอบความถูกต้องขั้นต้นของตัวแปรระบบ
+    # ตรวจสอบความถูกต้องทางวิศวกรรมขั้นต้น
     if G <= 0:
-        st.warning("⚠️ อัตราไหลสารทำความเย็น G มีค่าน้อยกว่าหรือเท่ากับ 0 (กรุณาตรวจสอบข้อมูลคอมเพรสเซอร์)")
-    elif HP <= LP:
+        st.warning("⚠️ อัตราไหลสารทำความเย็น G มีค่าน้อยกว่าหรือเท่ากับ 0 (กรุณาตรวจสอบข้อมูลสเปก)")
+    elif HP_abs <= LP_abs:
         st.error("❌ ข้อผิดพลาด: ความดันขาเข้า (HP) ต้องมากกว่าความดันขาออก (LP)")
     else:
-        display_dp = (HP - LP) * 14.5038 if unit == "PSI" else (HP - LP)
+        # คำนวณผลต่างความดันตกคร่อม (Pressure Drop ตัวแปรเกจหรือสัมบูรณ์ลบกันได้ค่าเท่ากัน)
+        display_dp = (HP_abs - LP_abs) * 14.5038 if unit == "PSI" else (HP_abs - LP_abs)
+        display_hp = HP_gauge * 14.5038 if unit == "PSI" else HP_gauge
+        display_lp = LP_gauge * 14.5038 if unit == "PSI" else LP_gauge
         
-        # สูตรหลักคำนวณ Cv โดยแทนที่ด้วยค่าคงที่ที่ล็อกไว้ (Y_CONSTANT, S_CONSTANT)
+        # สูตรหลักคำนวณ Cv
         part_1 = 1.17 * (G / (1000 * Y_CONSTANT))
-        part_2 = math.sqrt(S_CONSTANT / (HP - LP))
+        part_2 = math.sqrt(S_CONSTANT / (HP_abs - LP_abs))
         cv_result = part_1 * part_2 * K
 
         # แสดงผลลัพธ์หลักบนหน้าจอ
         st.subheader("📊 ผลการคำนวณ")
         res_col1, res_col2 = st.columns(2)
-        res_col1.metric("Pressure Drop", f"{display_dp:.3f} {unit}")
+        res_col1.metric("Pressure Drop (ΔP)", f"{display_dp:.3f} {unit}")
         res_col2.metric("ผลรวมค่า CV ที่คำนวณได้", f"{cv_result:.4f}")
         
         if g_mode != "ป้อนค่า G โดยตรง (kg/hr)":
             st.metric("💡 อัตราไหลมวล G จากสเปกคอมเพรสเซอร์", f"{G:.2f} kg/hr")
         
-        st.info(f"💡 **สภาวะระบบที่คำนวณ:** G = {G:.2f} kg/hr | HP = {HP:.3f} Bar A | LP = {LP:.3f} Bar A (ล็อกค่าคงที่ Y={Y_CONSTANT}, S={S_CONSTANT})")
+        st.info(f"💡 **สภาวะระบบเกจ:** G = {G:.2f} kg/hr | HP = {display_hp:.2f} {unit} gauge | LP = {display_lp:.2f} {unit} gauge")
 
         # --- 1. คำนวณหา Top 5 ทางเลือกที่ดีที่สุด ---
         all_options = []
@@ -274,12 +291,12 @@ if st.button("🚀 CALCULATE", type="primary", use_container_width=True):
             f"วิธีระบุค่า G: {g_mode}\n"
         )
         if g_mode != "ป้อนค่า G โดยตรง (kg/hr)":
-            log_content += f"ข้อมูลคอมเพรสเซอร์: SV={SV} m3/hr, nv={eta_v}%, Ts={T_s_c} °C\n"
+            log_content += f"ข้อมูลคอมเพรสเซอร์: SV={SV} m3/hr, nv={eta_v}%, Ps={Ps_gauge_input} Bar gauge, Ts={T_s_c} °C\n"
             
         log_content += (
             f"วิธีป้อนข้อมูลความดัน: {input_mode}\n"
             f"Ref. flow rate G: {G:.2f} kg/h\n"
-            f"ความดันคำนวณจริง: HP={HP:.3f} Bar A, LP={LP:.3f} Bar A\n"
+            f"สภาวะการทำงานเกจ: HP={display_hp:.3f} {unit} G, LP={display_lp:.3f} {unit} G\n"
             f"ค่าสัมประสิทธิ์ล็อกคงที่: Y={Y_CONSTANT}, S={S_CONSTANT}, K={K}\n"
             f"ผลลัพธ์ค่า CV วาล์วที่คำนวณได้: {cv_result:.4f}\n"
             f"--- ทางเลือกที่เหมาะสมที่สุด (Top 5) ---\n"
