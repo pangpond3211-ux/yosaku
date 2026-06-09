@@ -28,14 +28,12 @@ COLOR_MAP = {
     "ใหญ่เกินไป": "background-color: #ffffff; color: #6c757d;"
 }
 
-# ฟังก์ชันคำนวณคะแนนความเหมาะสม
 def get_suitability_score(pct, is_single):
     if pct > 87:  # ⚠️ เกิน 87% ขึ้นไป ให้ตัดออกจาก Choice แนะนำทันที
         return -1
     penalty = 0 if is_single else 5
     return 100 - abs(85 - pct) - penalty
 
-# ฟังก์ชันจัดการสีตารางเปรียบเทียบ
 def style_baseline_df(df):
     styles = pd.DataFrame('', index=df.index, columns=df.columns)
     for i, row in df.iterrows():
@@ -53,13 +51,18 @@ def color_matrix_cells(val):
     elif 85 < val <= 100: return "background-color: #fff3cd; color: #856404;"
     else: return "background-color: #ffffff; color: #6c757d;"
 
-# 🧪 ฟังก์ชันแปลงอุณหภูมิอิ่มตัว R717 (°C) -> ความดันสัมบูรณ์ (Bar Absolute)
+# 🧪 ฟังก์ชันคำนวณความดันสัมบูรณ์ R717 (Bar Abs) จากอุณหภูมิอิ่มตัว
 def nh3_temp_to_bar_abs(t_c):
     return (3.26631702e-08 * t_c**4 + 
             1.54531857e-05 * t_c**3 + 
             2.34641900e-03 * t_c**2 + 
             1.60674845e-01 * t_c + 
             4.29486480e+00)
+
+# 🧪 ฟังก์ชันคำนวณ Specific Gravity (Saturated Liquid Density / 1000) ของ R717 จากอุณหภูมิ
+def nh3_temp_to_sg(t_c):
+    # สมการพหุนามประเมินความหนาแน่นสัมพัทธ์ของแอมโมเนียเหลวอิ่มตัว
+    return (-4.02651515e-06 * t_c**2 - 1.42173485e-03 * t_c + 0.639121212)
 
 # ========================================================
 # ส่วนหัวของโปรแกรม (Header)
@@ -78,33 +81,35 @@ with st.expander("📖 ดูสมการและทฤษฎีที่ใ
     st.latex(r"C_v = 1.17 \times \left( \frac{G}{1000 \times Y} \right) \times \sqrt{\frac{S}{\Delta P}} \times K")
     st.markdown("""
     **คำอธิบายตัวแปรตำแหน่งต่าง ๆ:**
-    * $\Delta P = HP - LP$ : ความดันตกคร่อมวาล์ว (Pressure Drop) ในหน่วย ${Bar}$ *(ระบบจะแปลงหน่วยให้เป็น Bar อัตโนมัติก่อนเข้าสูตร)*
+    * $\Delta P = HP - LP$ : ความดันตกคร่อมวาล์ว (Pressure Drop) ในหน่วย ${Bar}$
     * $G$ : อัตราการไหลมวล (Mass Flow Rate) $[{kg/h}]$
-    * $Y$ : ค่าการขยายตัว (Expansion Factor) กำหนดตายตัวที่ $0.583$
-    * $S$ : ความถ่วงจำเพาะ (Specific Gravity) กำหนดตายตัวที่ $0.583$
-    * $K$ : ค่าปรับแก้ (K Factor) ที่ได้จากการป้อนข้อมูลของผู้ใช้งาน
+    * $Y$ : Specific weight ของน้ำยาก่อนเข้าวาล์ว (อ้างอิงฝั่ง Condensing / High Pressure)
+    * $S$ : Specific weight ของน้ำยาหลังออกจากวาล์ว (อ้างอิงฝั่ง Evaporating / Low Pressure)
+    * $K$ : ค่าปรับแก้ (K Factor) จากผู้ใช้งาน
     """)
 
 # 🔘 ส่วนเลือกวิธีการป้อนสภาวะทางกายภาพ
 input_mode = st.radio(
-    "เลือกวิธีระบุสภาวะความดัน:",
-    ["ป้อนด้วยความดันโดยตรง (Pressure)", "ป้อนด้วยอุณหภูมิแอมโมเนีย (R717 Temp)"],
-    horizontal=True
+    "เลือกวิธีระบุสภาวะความดันและคุณสมบัติน้ำยา:",
+    ["ป้อนด้วยความดันโดยตรง (Manual Pressure & Y, S)", "ป้อนด้วยอุณหภูมิแอมโมเนีย (Auto R717 Temp)"],
+    horizontal=False
 )
 
 unit = st.radio("เลือกหน่วยความดันแสดงผล:", ["Bar", "PSI"], horizontal=True)
 
-# ฟอร์มรับข้อมูลที่แปรผันตาม Mode ที่เลือก
-col1, col2 = st.columns(2)
-
-if input_mode == "ป้อนด้วยความดันโดยตรง (Pressure)":
+# กำหนดขอบเขตกรอกข้อมูลแยกตามโหมด
+if input_mode == "ป้อนด้วยความดันโดยตรง (Manual Pressure & Y, S)":
+    col1, col2 = st.columns(2)
     with col1:
         G = st.number_input("อัตราไหลมวล G (kg/h):", min_value=0.0, value=0.0, step=10.0)
         LP_input = st.number_input("ความดันขาออก LP:", min_value=0.0, value=0.0, step=0.1)
+        Y_input = st.number_input("Specific weight ก่อนวาล์ว (Y):", min_value=0.01, value=0.583, step=0.01, format="%.3f")
     with col2:
         HP_input = st.number_input("ความดันขาเข้า HP:", min_value=0.0, value=0.0, step=0.1)
         K = st.number_input("ค่าปรับแก้ K Factor:", min_value=0.0, value=1.0, step=0.1)
+        S_input = st.number_input("Specific weight หลังวาล์ว (S):", min_value=0.01, value=0.583, step=0.01, format="%.3f")
 else:
+    col1, col2 = st.columns(2)
     with col1:
         G = st.number_input("อัตราไหลมวล G (kg/h):", min_value=0.0, value=0.0, step=10.0)
         Evap_temp = st.number_input("อุณหภูมิระเหย Evaporating Temp (°C):", min_value=-50.0, max_value=60.0, value=-10.0, step=1.0)
@@ -114,37 +119,43 @@ else:
 
 # ปุ่มคำนวณ
 if st.button("🚀 CALCULATE", type="primary", use_container_width=True):
-    # ระบบตรวจสอบความถูกต้องขั้นต้น (Validation)
     if G <= 0:
         st.warning("⚠️ กรุณากรอกอัตราไหลมวล G ให้มากกว่า 0")
-    elif input_mode == "ป้อนด้วยความดันโดยตรง (Pressure)" and HP_input <= LP_input:
+    elif input_mode == "ป้อนด้วยความดันโดยตรง (Manual Pressure & Y, S)" and HP_input <= LP_input:
         st.error("❌ ข้อผิดพลาด: ความดันขาเข้า (HP) ต้องมากกว่าความดันขาออก (LP)")
-    elif input_mode == "ป้อนด้วยอุณหภูมิแอมโมเนีย (R717 Temp)" and Cond_temp <= Evap_temp:
-        st.error("❌ ข้อผิดพลาด: อุณหภูมิควบแน่น (Condensing Temp) ต้องมากกว่าอุณหภูมิระเหย (Evaporating Temp)")
+    elif input_mode == "ป้อนด้วยอุณหภูมิแอมโมเนีย (Auto R717 Temp)" and Cond_temp <= Evap_temp:
+        st.error("❌ ข้อผิดพลาด: อุณหภูมิควบแน่นต้องมากกว่าอุณหภูมิระเหย")
     else:
-        # คำนวณหา HP และ LP ในหน่วย Bar สำหรับใช้ในสูตรหลัก
-        if input_mode == "ป้อนด้วยความดันโดยตรง (Pressure)":
+        # ประมวลผลตัวแปรตามโหมดที่เลือก
+        if input_mode == "ป้อนด้วยความดันโดยตรง (Manual Pressure & Y, S)":
             HP = HP_input / 14.5038 if unit == "PSI" else HP_input
             LP = LP_input / 14.5038 if unit == "PSI" else LP_input
+            Y = Y_input
+            S = S_input
             display_dp = HP_input - LP_input
         else:
             HP = nh3_temp_to_bar_abs(Cond_temp)
             LP = nh3_temp_to_bar_abs(Evap_temp)
-            # แปลงส่วนต่างความดัน (Pressure Drop) กลับเป็นหน่วยที่เลือกเพื่อแสดงใน Metric
+            Y = nh3_temp_to_sg(Cond_temp)
+            S = nh3_temp_to_sg(Evap_temp)
             display_dp = (HP - LP) * 14.5038 if unit == "PSI" else (HP - LP)
             
-        S, Y = 0.583, 0.583
-        
-        # สูตรคำนวณ Cv
+        # สูตรหลักคำนวณ Cv 
         part_1 = 1.17 * (G / (1000 * Y))
         part_2 = math.sqrt(S / (HP - LP))
         cv_result = part_1 * part_2 * K
 
-        # แสดงผลลัพธ์หลัก
+        # แสดงผลลัพธ์หลักและสภาวะน้ำยาที่ใช้จริง
         st.subheader("📊 ผลการคำนวณ")
         res_col1, res_col2 = st.columns(2)
         res_col1.metric("Pressure Drop", f"{display_dp:.3f} {unit}")
         res_col2.metric("ผลรวมค่า CV ที่คำนวณได้", f"{cv_result:.4f}")
+        
+        # เพิ่มกล่องแสดงผลคุณสมบัติทางกายภาพขนาดย่อมสำหรับสแกนดูบนมือถือ
+        st.info(f"💡 **สภาวะแวดล้อมทางวิศวกรรมที่ใช้คำนวณ:**\n"
+                f"* ความดันเทียบเท่า: HP = {HP * 14.5038 if unit == 'PSI' else HP:.2f} {unit} | "
+                f"LP = {LP * 14.5038 if unit == 'PSI' else LP:.2f} {unit}\n"
+                f"* Specific Weight จริง: ก่อนวาล์ว (Y) = **{Y:.4f}** | หลังวาล์ว (S) = **{S:.4f}**")
 
         # --- 1. คำนวณหา Top 5 ทางเลือกที่ดีที่สุด ---
         all_options = []
@@ -219,16 +230,17 @@ if st.button("🚀 CALCULATE", type="primary", use_container_width=True):
 
         # --- 4. ระบบดาวน์โหลด Log สำหรับมือถือ ---
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        
-        if input_mode == "ป้อนด้วยความดันโดยตรง (Pressure)":
+        if input_mode == "ป้อนด้วยความดันโดยตรง (Manual Pressure & Y, S)":
             input_details = (
                 f"ความดันขาเข้า HP: {HP_input} {unit}\n"
                 f"ความดันขาออก LP: {LP_input} {unit}\n"
+                f"Specific Weight - Y: {Y}, S: {S}\n"
             )
         else:
             input_details = (
                 f"อุณหภูมิควบแน่น Condensing Temp: {Cond_temp} °C (เทียบเท่า {HP:.3f} Bar abs)\n"
                 f"อุณหภูมิระเหย Evaporating Temp: {Evap_temp} °C (เทียบเท่า {LP:.3f} Bar abs)\n"
+                f"Auto calculated - Y: {Y:.4f}, S: {S:.4f}\n"
             )
 
         log_content = (
