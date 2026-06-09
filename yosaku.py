@@ -95,7 +95,7 @@ st.markdown("---")
 st.subheader("📋 กรอกข้อมูลคุณสมบัติระบบ")
 col_g1, col_g2 = st.columns(2)
 with col_g1:
-    G = st.number_input("G: Ref. flow rate [Suction] (kg/hr):", min_value=0.0, value=1000.0, step=10.0)
+    G = st.number_input("G: Ref. flow rate (kg/hr):", min_value=0.0, value=1000.0, step=10.0)
     Y = st.number_input("Y: Specific weight before valve:", min_value=0.01, value=0.583, step=0.01, format="%.3f")
 with col_g2:
     K = st.number_input("ค่าปรับแก้ K Factor:", min_value=0.0, value=1.0, step=0.1)
