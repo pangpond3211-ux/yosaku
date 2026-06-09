@@ -5,6 +5,12 @@ import itertools
 from datetime import datetime
 import os
 
+# ========================================================
+# [CONFIG] ตั้งค่าความดันบรรยากาศอ้างอิงของบริษัท (หน้างาน)
+# ========================================================
+ATM_BAR = 1.013    # มาตรฐานทั่วไปใช้ 1.013 Bar (ถ้าหน้างานพี่ใช้ 1.0 ถ้วน สามารถแก้ตรงนี้ได้เลย)
+ATM_PSI = 14.70    # มาตรฐานฝั่ง PSI
+
 # ตั้งค่าหน้าตาของ Web App
 st.set_page_config(
     page_title="Yosaku Selection",
@@ -76,11 +82,11 @@ st.latex(r"C_v = 1.17 \times \left( \frac{G}{1000 \times Y} \right) \times \sqrt
 
 st.markdown("""
 **ความหมายตัวแปรตามมาตรฐานระบบ:**
-* **G (Ref. flow rate):** อัตราการไหลของสารทำความเย็น (หน่วย kg/hr)
+* **G (Ref. flow rate):** อัตราการไหลของสารทำความเย็นฝั่ง Suction จาก Data Compressor (หน่วย kg/hr)
 * **Y (Specific weight before valve):** ค่า Specific weight ของสารทำความเย็นก่อนเข้าวาล์ว
 * **S (Specific weight after valve):** ค่า Specific weight ของสารทำความเย็นหลังออกจากวาล์ว
 * **HP - LP (Pressure Drop):** ผลต่างความดันขาเข้าและขาออก (หน่วย Bar)
-* **K:** ค่าปรับแก้ (K Factor for Yosaku)
+* **K:** ค่าปรับแก้ (K Factor)
 """)
 
 st.markdown("---")
@@ -89,10 +95,10 @@ st.markdown("---")
 st.subheader("📋 กรอกข้อมูลคุณสมบัติระบบ")
 col_g1, col_g2 = st.columns(2)
 with col_g1:
-    G = st.number_input("G: Ref. flow rate [Suction] (kg/hr):", min_value=0.0, value=0.0, step=10.0)
+    G = st.number_input("G: Ref. flow rate [Suction] (kg/hr):", min_value=0.0, value=1000.0, step=10.0)
     Y = st.number_input("Y: Specific weight before valve:", min_value=0.01, value=0.583, step=0.01, format="%.3f")
 with col_g2:
-    K = st.number_input("ค่าปรับแก้ K Factor:", min_value=0.0, value=1.5, step=0.1)
+    K = st.number_input("ค่าปรับแก้ K Factor:", min_value=0.0, value=1.0, step=0.1)
     S = st.number_input("S: Specific weight after valve:", min_value=0.01, value=0.583, step=0.01, format="%.3f")
 
 st.markdown("---")
@@ -106,20 +112,20 @@ input_mode = st.radio(
 
 unit = st.radio("เลือกหน่วยความดันแสดงผล:", ["Bar", "PSI"], horizontal=True)
 
-# [MODIFIED] เปลี่ยนเป็นหน่วย Gauge และตั้งค่าเริ่มต้นให้เหมาะกับระบบ Ammonia จริง
+# [FIXED] ปรับค่า Default ให้ถอดรูทกลับไปเท่ากับแอปตัวแรกของพี่เป๊ะๆ
 p_label = "Bar G" if unit == "Bar" else "PSI G"
-min_p = -1.013 if unit == "Bar" else -14.70  # รองรับสภาวะ Vacuum (ติดลบ)
-hp_default = 13.65 if unit == "Bar" else 198.0  # ประมาณ 38°C ของ R717
-lp_default = 1.90 if unit == "Bar" else 27.5     # ประมาณ -10°C ของ R717
-p_step = 0.1 if unit == "Bar" else 1.0
+min_p = -ATM_BAR if unit == "Bar" else -ATM_PSI
+hp_default = (14.7 - ATM_BAR) if unit == "Bar" else 0.0
+lp_default = (2.91 - ATM_BAR) if unit == "Bar" else -11.79
+p_step = 0.001 if unit == "Bar" else 0.1
 
 col1, col2 = st.columns(2)
 
 if input_mode == "วิธีที่ 1: ป้อนด้วยความดันเกจโดยตรง (HP / LP)":
     with col1:
-        HP_input = st.number_input(f"ความดันขาเข้า HP ({p_label}):", min_value=min_p, value=hp_default, step=p_step, format="%.3f")
+        HP_input = st.number_input(f"ความดันขาเข้า HP ({p_label}):", min_value=float(min_p), value=float(hp_default), step=p_step, format="%.3f")
     with col2:
-        LP_input = st.number_input(f"ความดันขาออก LP ({p_label}):", min_value=min_p, value=lp_default, step=p_step, format="%.3f")
+        LP_input = st.number_input(f"ความดันขาออก LP ({p_label}):", min_value=float(min_p), value=float(lp_default), step=p_step, format="%.3f")
 else:
     with col1:
         Cond_temp = st.number_input("อุณหภูมิควบแน่น Condensing Temp Tc (°C):", min_value=-50.0, max_value=60.0, value=38.0, step=1.0)
@@ -128,14 +134,14 @@ else:
 
 # ปุ่มคำนวณ
 if st.button("🚀 CALCULATE", type="primary", use_container_width=True):
-    # [MODIFIED] แปลงจาก Gauge ให้เป็น Bar Absolute สำหรับใช้คำนวณในสูตรหลัก
+    # แปลงจาก Gauge ให้เป็น Bar Absolute สำหรับใช้คำนวณในสูตรหลัก
     if input_mode == "วิธีที่ 1: ป้อนด้วยความดันเกจโดยตรง (HP / LP)":
         if unit == "PSI":
-            HP = (HP_input + 14.7) / 14.5038
-            LP = (LP_input + 14.7) / 14.5038
+            HP = (HP_input + ATM_PSI) / 14.5038
+            LP = (LP_input + ATM_PSI) / 14.5038
         else:
-            HP = HP_input + 1.013
-            LP = LP_input + 1.013
+            HP = HP_input + ATM_BAR
+            LP = LP_input + ATM_BAR
     else:
         HP = nh3_temp_to_bar_abs(Cond_temp)
         LP = nh3_temp_to_bar_abs(Evap_temp)
@@ -146,7 +152,6 @@ if st.button("🚀 CALCULATE", type="primary", use_container_width=True):
     elif HP <= LP:
         st.error("❌ ข้อผิดพลาด: ความดันขาเข้า (HP) ต้องมากกว่าความดันขาออก (LP)")
     else:
-        # ค่า Pressure Drop คำนวณจากเกจหรือสัมบูรณ์ก็จะได้ค่าเท่ากัน
         display_dp = (HP - LP) * 14.5038 if unit == "PSI" else (HP - LP)
         
         # สูตรหลักคำนวณ Cv
@@ -161,8 +166,8 @@ if st.button("🚀 CALCULATE", type="primary", use_container_width=True):
         res_col2.metric("ผลรวมค่า CV ที่คำนวณได้", f"{cv_result:.4f}")
         
         # แสดงค่าแปลงกลับเป็นเกจเพื่อให้ตรวจสอบหน้างานง่าย
-        hp_g_show = (HP * 14.5038) - 14.7 if unit == "PSI" else HP - 1.013
-        lp_g_show = (LP * 14.5038) - 14.7 if unit == "PSI" else LP - 1.013
+        hp_g_show = (HP * 14.5038) - ATM_PSI if unit == "PSI" else HP - ATM_BAR
+        lp_g_show = (LP * 14.5038) - ATM_PSI if unit == "PSI" else LP - ATM_BAR
         st.info(f"💡 **สภาวะในระบบ:** G = {G} kg/hr | HP = {hp_g_show:.3f} {p_label} | LP = {lp_g_show:.3f} {p_label} (Y={Y}, S={S})")
 
         # --- 1. คำนวณหา Top 5 ทางเลือกที่ดีที่สุด ---
