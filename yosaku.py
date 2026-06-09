@@ -76,11 +76,11 @@ st.latex(r"C_v = 1.17 \times \left( \frac{G}{1000 \times Y} \right) \times \sqrt
 
 st.markdown("""
 **ความหมายตัวแปรตามมาตรฐานระบบ:**
-* **G (Ref. flow rate):** อัตราการไหลของสารทำความเย็นฝั่ง Suction จาก Data Compressor (หน่วย kg/hr)
+* **G (Ref. flow rate):** อัตราการไหลของสารทำความเย็น (หน่วย kg/hr)
 * **Y (Specific weight before valve):** ค่า Specific weight ของสารทำความเย็นก่อนเข้าวาล์ว
 * **S (Specific weight after valve):** ค่า Specific weight ของสารทำความเย็นหลังออกจากวาล์ว
 * **HP - LP (Pressure Drop):** ผลต่างความดันขาเข้าและขาออก (หน่วย Bar)
-* **K:** ค่าปรับแก้ (K Factor)
+* **K:** ค่าปรับแก้ (K Factor for Yosaku)
 """)
 
 st.markdown("---")
@@ -89,10 +89,10 @@ st.markdown("---")
 st.subheader("📋 กรอกข้อมูลคุณสมบัติระบบ")
 col_g1, col_g2 = st.columns(2)
 with col_g1:
-    G = st.number_input("G: Ref. flow rate [Suction] (kg/hr):", min_value=0.0, value=1000.0, step=10.0)
+    G = st.number_input("G: Ref. flow rate [Suction] (kg/hr):", min_value=0.0, value=0.0, step=10.0)
     Y = st.number_input("Y: Specific weight before valve:", min_value=0.01, value=0.583, step=0.01, format="%.3f")
 with col_g2:
-    K = st.number_input("ค่าปรับแก้ K Factor:", min_value=0.0, value=1.0, step=0.1)
+    K = st.number_input("ค่าปรับแก้ K Factor:", min_value=0.0, value=1.5, step=0.1)
     S = st.number_input("S: Specific weight after valve:", min_value=0.01, value=0.583, step=0.01, format="%.3f")
 
 st.markdown("---")
