@@ -70,8 +70,23 @@ else:
 st.title("💻⚙️ Yosaku Selection")
 st.caption("พัฒนาโดย Chattrawat Khamsee | เวอร์ชัน Web App สำหรับมือถือ")
 
-# 🔘 ส่วนร่วม: ป้อนข้อมูลพื้นฐาน (ใช้ร่วมกันทุกโหมดเพื่อความสอดคล้อง)
-st.subheader("📋 ข้อมูลพื้นฐานการไหล")
+# 📖 ส่วนแสดงสมการหลัก (เปิดเผยบนหน้าจอโดยตรง)
+st.markdown("### 📊 สมการอ้างอิงการคำนวณ (Formula)")
+st.latex(r"C_v = 1.17 \times \left( \frac{G}{1000 \times Y} \right) \times \sqrt{\frac{S}{HP - LP}} \times K")
+
+st.markdown("""
+**ความหมายตัวแปร:**
+* **HP - LP (Pressure Drop):** ผลต่างความดันขาเข้าและขาออก (หน่วย Bar)
+* **G:** อัตราการไหลมวล (Mass Flow Rate) หน่วย kg/h
+* **Y:** Specific weight ก่อนเข้าวาล์ว (ค่าเริ่มต้นคงที่ 0.583)
+* **S:** Specific weight หลังออกจากวาล์ว (ค่าเริ่มต้นคงที่ 0.583)
+* **K:** ค่าปรับแก้ (K Factor)
+""")
+
+st.markdown("---")
+
+# 🔘 ส่วนร่วม: ป้อนข้อมูลพื้นฐาน
+st.subheader("📋กรอกข้อมูลคุณสมบัติระบบ")
 col_g1, col_g2 = st.columns(2)
 with col_g1:
     G = st.number_input("อัตราไหลมวล G (kg/h):", min_value=0.0, value=1000.0, step=10.0)
@@ -112,20 +127,18 @@ if st.button("🚀 CALCULATE", type="primary", use_container_width=True):
         HP = HP_input / 14.5038 if unit == "PSI" else HP_input
         LP = LP_input / 14.5038 if unit == "PSI" else LP_input
     else:
-        # แปลง Tc และ Te เป็น Bar Absolute อัตโนมัติ
         HP = nh3_temp_to_bar_abs(Cond_temp)
         LP = nh3_temp_to_bar_abs(Evap_temp)
 
-    # ระบบตรวจสอบความถูกต้องขั้นต้น (Validation)
+    # ตรวจสอบความถูกต้องขั้นต้น
     if G <= 0:
         st.warning("⚠️ กรุณากรอกอัตราไหลมวล G ให้มากกว่า 0")
     elif HP <= LP:
         st.error("❌ ข้อผิดพลาด: ความดันขาเข้า (HP) ต้องมากกว่าความดันขาออก (LP)")
     else:
-        # คำนวณค่า Pressure Drop สำหรับแสดงผลตามหน่วยที่เลือก
-        display_dp = (HP - LP) * 14.5038 if unit == "PSI" else (HP - LP)
+        display_dp = (HP - IP) * 14.5038 if unit == "PSI" else (HP - LP)
         
-        # สูตรหลักคำนวณ Cv (ใช้ Y และ S จากช่องกรอกด้านบนเสมอ ไม่แปรผันตามอุณหภูมิ)
+        # สูตรหลักคำนวณ Cv
         part_1 = 1.17 * (G / (1000 * Y))
         part_2 = math.sqrt(S / (HP - LP))
         cv_result = part_1 * part_2 * K
@@ -136,7 +149,6 @@ if st.button("🚀 CALCULATE", type="primary", use_container_width=True):
         res_col1.metric("Pressure Drop", f"{display_dp:.3f} {unit}")
         res_col2.metric("ผลรวมค่า CV ที่คำนวณได้", f"{cv_result:.4f}")
         
-        # แสดงสภาวะความดันจริงที่ใช้ในสูตร
         st.info(f"💡 **ค่าความดันที่ใช้คำนวณในระบบ:** HP = {HP:.3f} Bar A | LP = {LP:.3f} Bar A (Y={Y}, S={S})")
 
         # --- 1. คำนวณหา Top 5 ทางเลือกที่ดีที่สุด ---
@@ -170,14 +182,13 @@ if st.button("🚀 CALCULATE", type="primary", use_container_width=True):
             recommendation_text = f"ไม่มีชุดประกอบที่เปิดไม่เกิน 87% -> แนะนำใช้ขนานเพิ่มเป็น {qty_needed} x JH"
             st.error(f"⚠️ {recommendation_text}")
 
-        # ฟังก์ชันแปลงเปอร์เซ็นต์เป็นข้อความสถานะ
         def get_status_text(pct):
             if pct > 100: return "เล็กเกินไป"
             elif 75 <= pct <= 85: return "เหมาะสม"
             elif 85 < pct <= 100: return "ใกล้เต็ม"
             else: return "ใหญ่เกินไป"
 
-        # --- 2. สร้างตารางที่ 1 & 2 พร้อมใส่สีไฮไลต์ ---
+        # --- 2. สร้างตารางที่ 1 & 2 ---
         st.subheader("📋 ตารางอ้างอิงสถานะแบบ 1 ตัว VS ขนาน 2 ตัวรุ่นเดียวกัน")
         baseline_rows = []
         for name, max_cv in ORIFICE_DATA:
