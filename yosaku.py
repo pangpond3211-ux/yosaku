@@ -3,6 +3,7 @@ import pandas as pd
 import math
 import itertools
 from datetime import datetime
+import os
 
 # ตั้งค่าหน้าตาของ Web App ให้เหมาะกับมือถือ
 st.set_page_config(
@@ -19,35 +20,30 @@ ORIFICE_DATA = [
     ("JF", 0.35), ("JG", 0.41), ("JH", 0.48)
 ]
 
-# ฟังก์ชันคำนวณคะแนนความเหมาะสม (อัปเดตเงื่อนไขใหม่)
+# สไตล์สีสำหรับตารางสถานะ
+COLOR_MAP = {
+    "เล็กเกินไป": "background-color: #ffcccc; color: #cc0000;",
+    "เหมาะสม": "background-color: #d4edda; color: #155724; font-weight: bold;",
+    "ใกล้เต็ม": "background-color: #fff3cd; color: #856404;",
+    "ใหญ่เกินไป": "background-color: #ffffff; color: #6c757d;"
+}
+
+# ฟังก์ชันคำนวณคะแนนความเหมาะสม
 def get_suitability_score(pct, is_single):
     if pct > 87:  # ⚠️ เกิน 87% ขึ้นไป ให้ตัดออกจาก Choice แนะนำทันที
         return -1
     penalty = 0 if is_single else 5
     return 100 - abs(85 - pct) - penalty
 
+# ฟังก์ชันจัดการสีตารางเปรียบเทียบ (แบบลดรูปโค้ดซ้ำซ้อน)
 def style_baseline_df(df):
     styles = pd.DataFrame('', index=df.index, columns=df.columns)
     for i, row in df.iterrows():
-        s1 = row["สถานะ (1 ตัว)"]
-        style1 = {
-            "เล็กเกินไป": "background-color: #ffcccc; color: #cc0000;",
-            "เหมาะสม": "background-color: #d4edda; color: #155724; font-weight: bold;",
-            "ใกล้เต็ม": "background-color: #fff3cd; color: #856404;",
-            "ใหญ่เกินไป": "background-color: #ffffff; color: #6c757d;"
-        }.get(s1, "")
-        styles.at[i, "% เปิด (1 ตัว)"] = style1
-        styles.at[i, "สถานะ (1 ตัว)"] = style1
-        
-        s2 = row["สถานะ (2 ตัว)"]
-        style2 = {
-            "เล็กเกินไป": "background-color: #ffcccc; color: #cc0000;",
-            "เหมาะสม": "background-color: #d4edda; color: #155724; font-weight: bold;",
-            "ใกล้เต็ม": "background-color: #fff3cd; color: #856404;",
-            "ใหญ่เกินไป": "background-color: #ffffff; color: #6c757d;"
-        }.get(s2, "")
-        styles.at[i, "% เปิด (2 ตัว)"] = style2
-        styles.at[i, "สถานะ (2 ตัว)"] = style2
+        for config in ["1 ตัว", "2 ตัว"]:
+            status_val = row[f"สถานะ ({config})"]
+            style_style = COLOR_MAP.get(status_val, "")
+            styles.at[i, f"% เปิด ({config})"] = style_style
+            styles.at[i, f"สถานะ ({config})"] = style_style
     return styles
 
 def color_matrix_cells(val):
@@ -60,10 +56,14 @@ def color_matrix_cells(val):
 # ========================================================
 # ส่วนหัวของโปรแกรม (Header)
 # ========================================================
-# แทรกบรรทัดนี้เพิ่มเข้าไป (ปรับขนาดความกว้างด้วย width ตามต้องการ)
-st.image("logo.png", width=150)
+# ตรวจสอบไฟล์โลโก้เพื่อป้องกันแอปพัง
+if os.path.exists("logo.png"):
+    st.image("logo.png", width=150)
+else:
+    st.caption("⚙️ Mayekawa (Thailand) Co., Ltd.")
+
 st.title("💻⚙️ Yosaku Selection")
-st.caption("พัฒนาโดย Chattrawat Khamsee | Mayekawa (Thailand) CO.,LTD | เวอร์ชัน Web App สำหรับมือถือ")
+st.caption("พัฒนาโดย Chattrawat Khamsee | เวอร์ชัน Web App สำหรับมือถือ")
 
 # 📖 ส่วนแสดงสมการและที่มา (พับเก็บได้)
 with st.expander("📖 ดูสมการและทฤษฎีที่ใช้คำนวณ (Formula & Derivation)"):
@@ -92,10 +92,11 @@ with col2:
 
 # ปุ่มคำนวณ
 if st.button("🚀 CALCULATE", type="primary", use_container_width=True):
-    if HP_input <= LP_input and G > 0:
-        st.error("❌ ข้อผิดพลาด: ความดันขาเข้า (HP) ต้องมากกว่าความดันขาออก (LP)")
-    elif G <= 0:
+    # ปรับลอจิกการเช็กเงื่อนไขให้เคลียร์และปลอดภัยยิ่งขึ้น
+    if G <= 0:
         st.warning("⚠️ กรุณากรอกอัตราไหลมวล G ให้มากกว่า 0")
+    elif HP_input <= LP_input:
+        st.error("❌ ข้อผิดพลาด: ความดันขาเข้า (HP) ต้องมากกว่าความดันขาออก (LP)")
     else:
         # แปลงหน่วยความดัน
         HP = HP_input / 14.5038 if unit == "PSI" else HP_input
@@ -116,7 +117,7 @@ if st.button("🚀 CALCULATE", type="primary", use_container_width=True):
         res_col1.metric("Pressure Drop", f"{display_dp:.3f} {unit}")
         res_col2.metric("ผลรวมค่า CV ที่คำนวณได้", f"{cv_result:.4f}")
 
-        # --- 1. คำนวณหา Top 5 ทางเลือกที่ดีที่สุด (ภายใต้เงื่อนไขไม่เกิน 87%) ---
+        # --- 1. คำนวณหา Top 5 ทางเลือกที่ดีที่สุด ---
         all_options = []
         for name, max_cv in ORIFICE_DATA:
             pct = (cv_result / max_cv) * 100
@@ -137,15 +138,17 @@ if st.button("🚀 CALCULATE", type="primary", use_container_width=True):
         st.success("🏆 **ชุดประกอบแนะนำที่ดีที่สุด 5 อันดับแรก (แนะนำที่ 80% - 85%)**")
         if all_options:
             recommendation_text = ""
+            rank_emojis = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣"]
             for i, (score, label) in enumerate(all_options[:5]):
-                st.write(f"**อันดับ {i+1}:** {label}")
+                emoji = rank_emojis[i] if i < len(rank_emojis) else f"[{i+1}]"
+                st.markdown(f"**{emoji}** {label}")
                 recommendation_text += f"อันดับ {i+1}: {label}\n"
         else:
             qty_needed = math.ceil(cv_result / 0.48)
             recommendation_text = f"ไม่มีชุดประกอบที่เปิดไม่เกิน 87% -> แนะนำใช้ขนานเพิ่มเป็น {qty_needed} x JH"
             st.error(f"⚠️ {recommendation_text}")
 
-        # ฟังก์ชันแปลงเปอร์เซ็นต์เป็นข้อความสถานะ (คงไว้สำหรับตารางอ้างอิงภาพรวม)
+        # ฟังก์ชันแปลงเปอร์เซ็นต์เป็นข้อความสถานะ
         def get_status_text(pct):
             if pct > 100: return "เล็กเกินไป"
             elif 75 <= pct <= 85: return "เหมาะสม"
@@ -172,7 +175,7 @@ if st.button("🚀 CALCULATE", type="primary", use_container_width=True):
         })
         st.dataframe(styled_base, use_container_width=True, hide_index=True)
 
-        # --- 3. สร้างตารางที่ 3: เมทริกซ์การคละรุ่น พร้อมใส่สีไฮไลต์ ---
+        # --- 3. สร้างตารางที่ 3: เมทริกซ์การคละรุ่น ---
         st.subheader("🗺️ ตารางวิเคราะห์เปอร์เซ็นต์เปิดรวม แบบจับคู่คละรุ่น 2 ตัว")
         matrix_dict = {}
         for name1, cv1 in ORIFICE_DATA:
