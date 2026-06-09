@@ -70,31 +70,52 @@ else:
 st.title("💻⚙️ Yosaku Selection")
 st.caption("พัฒนาโดย Chattrawat Khamsee | เวอร์ชัน Web App สำหรับมือถือ")
 
-# 📖 ส่วนแสดงสมการหลัก (เปิดเผยบนหน้าจอโดยตรง)
+# 📖 ส่วนแสดงสมการหลัก
 st.markdown("### 📊 สมการอ้างอิงการคำนวณ (Formula)")
 st.latex(r"C_v = 1.17 \times \left( \frac{G}{1000 \times Y} \right) \times \sqrt{\frac{S}{HP - LP}} \times K")
 
+st.markdown("**กรณีคำนวณอัตราไหลมวล G จากสเปกคอมเพรสเซอร์ (R717):**")
+st.latex(r"G = \frac{SV \times \eta_v \times P_s}{0.4882 \times T_s}")
+
 st.markdown("""
-**ความหมายตัวแปรตามมาตรฐานระบบ:**
-* **G (Ref. flow rate):** อัตราการไหลของสารทำความเย็นฝั่ง Suction จาก Data Compressor (หน่วย kg/hr)
-* **Y (Specific weight before valve):** ค่า Specific weight ของสารทำความเย็นก่อนเข้าวาล์ว
-* **S (Specific weight after valve):** ค่า Specific weight ของสารทำความเย็นหลังออกจากวาล์ว
-* **HP - LP (Pressure Drop):** ผลต่างความดันขาเข้าและขาออก (หน่วย Bar)
-* **K:** ค่าปรับแก้ (K Factor)
+**ความหมายตัวแปรเพิ่มเติม:**
+* **SV (Swept Volume):** ปริมาตรกวาดทฤษฎีของคอมเพรสเซอร์ (m³/hr)
+* **ηv (Volumetric Efficiency):** ประสิทธิภาพเชิงปริมาตร (%)
+* **Ps (Suction Pressure):** ความดันสัมบูรณ์ทางดูด (ระบบจะแปลงจาก LP ด้านล่างให้เป็นหน่วย kPa A อัตโนมัติ)
+* **Ts (Suction Temperature):** อุณหภูมิทางดูดจริงในหน่วยเคลวิน (K = °C + 273.15)
 """)
 
 st.markdown("---")
 
-# 🔘 ส่วนร่วม: ป้อนข้อมูลพื้นฐาน
+# ========================================================
+# 📋 ส่วนที่ปรับปรุง: เลือกวิธีระบุค่า G
+# ========================================================
 st.subheader("📋 กรอกข้อมูลคุณสมบัติระบบ")
+
+g_mode = st.radio(
+    "เลือกวิธีระบุอัตราการไหลมวล (G):",
+    ["ป้อนค่า G โดยตรง (kg/hr)", "คำนวณจากสเปกคอมเพรสเซอร์ (Swept Volume)"],
+    horizontal=True
+)
+
 col_g1, col_g2 = st.columns(2)
-with col_g1:
-    # อัปเดต Label ของค่า G ให้ตรงตาม Remark ในใบสเปก
-    G = st.number_input("G: Ref. flow rate [Suction] (kg/hr):", min_value=0.0, value=1000.0, step=10.0)
-    Y = st.number_input("Y: Specific weight before valve:", min_value=0.01, value=0.583, step=0.01, format="%.3f")
-with col_g2:
-    K = st.number_input("ค่าปรับแก้ K Factor:", min_value=0.0, value=1.0, step=0.1)
-    S = st.number_input("S: Specific weight after valve:", min_value=0.01, value=0.583, step=0.01, format="%.3f")
+
+if g_mode == "ป้อนค่า G โดยตรง (kg/hr)":
+    with col_g1:
+        G_input = st.number_input("G: Ref. flow rate [Suction] (kg/hr):", min_value=0.0, value=1000.0, step=10.0)
+        Y = st.number_input("Y: Specific weight before valve:", min_value=0.01, value=0.583, step=0.01, format="%.3f")
+    with col_g2:
+        K = st.number_input("ค่าปรับแก้ K Factor:", min_value=0.0, value=1.0, step=0.1)
+        S = st.number_input("S: Specific weight after valve:", min_value=0.01, value=0.583, step=0.01, format="%.3f")
+else:
+    with col_g1:
+        SV = st.number_input("SV: Swept Volume (m³/hr):", min_value=0.0, value=435.0, step=5.0)
+        eta_v = st.number_input("ηv: Volumetric Efficiency (%):", min_value=0.0, max_value=100.0, value=85.0, step=1.0)
+        Y = st.number_input("Y: Specific weight before valve:", min_value=0.01, value=0.583, step=0.01, format="%.3f")
+    with col_g2:
+        T_s_c = st.number_input("Ts: Suction Temp (°C):", min_value=-50.0, max_value=100.0, value=-5.0, step=1.0, help="อุณหภูมิแก๊สจริงทางดูดรวม Superheat แล้ว")
+        K = st.number_input("ค่าปรับแก้ K Factor:", min_value=0.0, value=1.0, step=0.1)
+        S = st.number_input("S: Specific weight after valve:", min_value=0.01, value=0.583, step=0.01, format="%.3f")
 
 st.markdown("---")
 
@@ -123,7 +144,7 @@ else:
 
 # ปุ่มคำนวณ
 if st.button("🚀 CALCULATE", type="primary", use_container_width=True):
-    # ประมวลผลหาค่า HP และ LP ในหน่วย Bar (Absolute)
+    # 1. ประมวลผลหาค่า HP และ LP ในหน่วย Bar (Absolute)
     if input_mode == "วิธีที่ 1: ป้อนด้วยความดันโดยตรง (HP / LP)":
         HP = HP_input / 14.5038 if unit == "PSI" else HP_input
         LP = LP_input / 14.5038 if unit == "PSI" else LP_input
@@ -131,13 +152,21 @@ if st.button("🚀 CALCULATE", type="primary", use_container_width=True):
         HP = nh3_temp_to_bar_abs(Cond_temp)
         LP = nh3_temp_to_bar_abs(Evap_temp)
 
+    # 2. คำนวณหาค่า G ตามโหมดที่เลือก
+    if g_mode == "ป้อนค่า G โดยตรง (kg/hr)":
+        G = G_input
+    else:
+        # ลอจิกแปลงค่าและคำนวณตามกฎ Ideal Gas Law ของแอมโมเนีย
+        Ps_kpa = LP * 100.0  # เปลี่ยน Bar A เป็น kPa A
+        Ts_k = T_s_c + 273.15  # เปลี่ยน °C เป็น Kelvin
+        G = (SV * (eta_v / 100.0) * Ps_kpa) / (0.4882 * Ts_k)
+
     # ตรวจสอบความถูกต้องขั้นต้น
     if G <= 0:
-        st.warning("⚠️ กรุณากรอกอัตราไหลสารทำความเย็น G ให้มากกว่า 0")
+        st.warning("⚠️ อัตราไหลสารทำความเย็น G มีค่าน้อยกว่าหรือเท่ากับ 0 (กรุณาตรวจสอบข้อมูลคอมเพรสเซอร์)")
     elif HP <= LP:
         st.error("❌ ข้อผิดพลาด: ความดันขาเข้า (HP) ต้องมากกว่าความดันขาออก (LP)")
     else:
-        # [FIXED BUG]: เปลี่ยนจาก IP เป็น LP เรียบร้อยครับ
         display_dp = (HP - LP) * 14.5038 if unit == "PSI" else (HP - LP)
         
         # สูตรหลักคำนวณ Cv
@@ -151,7 +180,10 @@ if st.button("🚀 CALCULATE", type="primary", use_container_width=True):
         res_col1.metric("Pressure Drop", f"{display_dp:.3f} {unit}")
         res_col2.metric("ผลรวมค่า CV ที่คำนวณได้", f"{cv_result:.4f}")
         
-        st.info(f"💡 **ค่าในระบบ:** G = {G} kg/hr | HP = {HP:.3f} Bar A | LP = {LP:.3f} Bar A (Y={Y}, S={S})")
+        if g_mode != "ป้อนค่า G โดยตรง (kg/hr)":
+            st.metric("💡 อัตราไหลมวล G ที่คำนวณได้จากสเปก", f"{G:.2f} kg/hr")
+        
+        st.info(f"💡 **ค่าในระบบ:** G = {G:.2f} kg/hr | HP = {HP:.3f} Bar A | LP = {LP:.3f} Bar A (Y={Y}, S={S})")
 
         # --- 1. คำนวณหา Top 5 ทางเลือกที่ดีที่สุด ---
         all_options = []
@@ -227,8 +259,14 @@ if st.button("🚀 CALCULATE", type="primary", use_container_width=True):
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         log_content = (
             f"=== บันทึกเมื่อ {current_time} ===\n"
-            f"วิธีป้อนข้อมูล: {input_mode}\n"
-            f"Ref. flow rate G: {G} kg/h (Suction from Compressor)\n"
+            f"วิธีระบุค่า G: {g_mode}\n"
+        )
+        if g_mode != "ป้อนค่า G โดยตรง (kg/hr)":
+            log_content += f"ข้อมูลคอมเพรสเซอร์: SV={SV} m3/hr, ηv={eta_v}%, Ts={T_s_c} °C\n"
+            
+        log_content += (
+            f"วิธีป้อนข้อมูลความดัน: {input_mode}\n"
+            f"Ref. flow rate G: {G:.2f} kg/h\n"
             f"ความดันคำนวณจริง: HP={HP:.3f} Bar A, LP={LP:.3f} Bar A\n"
             f"ค่าสัมประสิทธิ์ที่ใช้: Y={Y}, S={S}, K={K}\n"
             f"ผลลัพธ์ค่า CV วาล์วที่คำนวณได้: {cv_result:.4f}\n"
