@@ -75,7 +75,7 @@ else:
 
 st.title("💻⚙️ Yosaku Selection")
 st.caption("พัฒนาโดย Chattrawat Khamsee | เวอร์ชัน Web App สำหรับมือถือ")
-
+st.caption("⚙️ Mayekawa (Thailand) Co., Ltd.")
 # 📖 ส่วนแสดงสมการหลัก
 st.markdown("### 📊 สมการอ้างอิงการคำนวณ (Formula)")
 st.latex(r"C_v = 1.17 \times \left( \frac{G}{1000 \times Y} \right) \times \sqrt{\frac{S}{HP - LP}} \times K")
