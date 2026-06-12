@@ -82,7 +82,7 @@ st.latex(r"C_v = 1.17 \times \left( \frac{G}{1000 \times Y} \right) \times \sqrt
 
 st.markdown("""
 **ความหมายตัวแปรตามมาตรฐานระบบ:**
-* **G (Ref. flow rate):** อัตราการไหลของสารทำความเย็นฝั่ง Suction จาก Data Compressor (หน่วย kg/hr)
+* **G (Ref. flow rate):** อัตราการไหลของสารทำความเย็น (หน่วย kg/hr)
 * **Y (Specific weight before valve):** ค่า Specific weight ของสารทำความเย็นก่อนเข้าวาล์ว
 * **S (Specific weight after valve):** ค่า Specific weight ของสารทำความเย็นหลังออกจากวาล์ว
 * **HP - LP (Pressure Drop):** ผลต่างความดันขาเข้าและขาออก (หน่วย Bar)
