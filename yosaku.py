@@ -12,7 +12,7 @@ ATM_PSI = 14.70    # มาตรฐานฝั่ง PSI
 
 # ตั้งค่าหน้าตาของ Web App
 st.set_page_config(
-    page_title="Yosaku Selection Pro (Liquid Injection Mode)",
+    page_title="Yosaku Selection Pro (Advanced LI Mode)",
     page_icon="⚙️",
     layout="centered",
     initial_sidebar_state="collapsed"
@@ -82,7 +82,6 @@ def estimate_oil_heat(model, te, tc, has_eco):
     p_diff_ratio = (pc - pe) / (pc_ref - pe_ref) if (pc_ref - pe_ref) > 0 else 1.0
     cr_ratio = (pc / pe) / (pc_ref / pe_ref) if pe > 0 else 1.0
     
-    # ภาระความร้อนแปรผันตามอัตราการอัดและแรงดันตกคร่อมคอมเพรสเซอร์
     estimated_kw = base_kw * (p_diff_ratio ** 0.75) * (cr_ratio ** 0.35)
     
     if has_eco:
@@ -118,7 +117,7 @@ def color_matrix_cells(val):
 # ส่วนแสดงผลหลักบนหน้าเว็บ (UI)
 # ========================================================
 st.title("💻⚙️ Yosaku Selection Pro")
-st.subheader("ระบบคำนวณวาล์วสำหรับ LIQUID INJECTION OIL COOLING")
+st.subheader("ระบบคำนวณวาล์วสำหรับ LIQUID INJECTION OIL COOLING (Advanced)")
 st.caption("⚙️ Mayekawa (Thailand) Co., Ltd.")
 st.markdown("---")
 
@@ -129,20 +128,19 @@ col_input1, col_input2 = st.columns(2)
 with col_input1:
     selected_model = st.selectbox("เลือกรุ่นคอมเพรสเซอร์ MYCOM:", list(MYCOM_BASE_OIL_REJECTION.keys()), on_change=reset_calculation)
     Evap_temp = st.number_input("อุณหภูมิระเหย Te (°C):", min_value=-50.0, max_value=20.0, value=-10.0, step=0.5, on_change=reset_calculation)
-    # เพิ่มกล่องสำหรับกรอกค่า Discharge Superheat ตามรายงานสเปกหน้างานจริง
-    discharge_sh = st.number_input("Discharge Superheat (K):", min_value=0.0, max_value=50.0, value=20.0, step=1.0, help="ระบุค่าความร้อนซูเปอร์ฮีตด้านส่ง โดยปกติสเปกมาตรฐานของ MYCOMW จะกำหนดไว้ที่ 20 K", on_change=reset_calculation)
+    discharge_sh = st.number_input("Discharge Superheat (K):", min_value=0.0, max_value=50.0, value=20.0, step=1.0, help="ระบุค่าความร้อนซูเปอร์ฮีตด้านส่ง โดยปกติมาตรฐาน MYCOMW จะอยู่ที่ 20 K", on_change=reset_calculation)
 
 with col_input2:
     has_eco = st.checkbox("⚡ เปิดใช้งานระบบ Economizer (ECO Port)", value=False, on_change=reset_calculation)
-    st.write("") 
     Cond_temp = st.number_input("อุณหภูมิควบแน่น Tc (°C):", min_value=10.0, max_value=60.0, value=35.0, step=0.5, on_change=reset_calculation)
+    # 🆕 เพิ่มช่องป้อนค่า Liquid Subcooling (K)
+    liquid_subcooling = st.number_input("Liquid Subcooling (K):", min_value=0.0, max_value=30.0, value=5.0, step=0.5, help="ระบุค่าความเย็นยวดยิ่งของน้ำยาเหลว (มักเกิดจากคอยล์คอนเดนเซอร์หรือชุด Subcooler) หากไม่มีให้ใส่ 0", on_change=reset_calculation)
 
 st.markdown("---")
 
-# 🔘 ส่วนที่ 2: ค่า Oil Heat Rejection (คำนวณอัตโนมัติสอดคล้องตามสภาวะระบบ + ปรับแก้เองได้)
+# 🔘 ส่วนที่ 2: ค่า Oil Heat Rejection
 st.subheader("🔥 2. ภาระความร้อนน้ำมัน (Oil Heat Rejection)")
 
-# คำนวณค่าจากสมการประมวลผลโมเดลคอมเพรสเซอร์อัตโนมัติ
 auto_computed_kw = estimate_oil_heat(selected_model, Evap_temp, Cond_temp, has_eco)
 
 q_oil_kw = st.number_input(
@@ -152,7 +150,7 @@ q_oil_kw = st.number_input(
     value=float(auto_computed_kw),
     step=0.1,
     format="%.2f",
-    help="ระบบใส่ค่าไกด์ไลน์คำนวณอัตโนมัติให้แล้ว หากมีค่าจริงจากใบพิมพ์สเปกคอมเพรสเซอร์ สามารถพิมพ์ทับเพื่อความแม่นยำสูงสุดได้เลยครับ",
+    help="ระบบใส่ค่าแนะนำเบื้องต้นให้แล้ว หากมีค่าจริงจากใบสเปกสามารถพิมพ์ทับได้เลยครับ",
     on_change=reset_calculation
 )
 
@@ -181,25 +179,27 @@ if st.session_state.calculated:
     HP_abs = nh3_temp_to_bar_abs(Cond_temp)
     LP_abs = nh3_temp_to_bar_abs(Evap_temp)
     
-    # สำหรับงานฉีดสารเหลวเข้าคอมเพรสเซอร์ (Liquid Injection Port) 
-    # แรงดันปลายทางในห้องอัด (Downstream Pocket) จะประมาณค่าเป็นแรงดันจุดกลาง (Intermediate Pressure)
+    # คำนวณแรงดันจุดกลางหน้าพอร์ตฉีดหล่อเย็นในห้องอัด
     PM_abs = math.sqrt(HP_abs * LP_abs) if LP_abs > 0 else LP_abs
-    dp_bar = HP_abs - PM_abs  # แรงดันตกคร่อมตัววาล์วหรี่จริง
+    dp_bar = HP_abs - PM_abs  
     
-    # 2. คำนวณความหนาแน่นสารทำความเย็นก่อนและหลังผ่านพอร์ตวาล์ว
-    Y = nh3_liquid_density(Cond_temp)
-    # อุณหภูมิจำลองในห้องอัดแปรผันตามแรงดันจุดกลาง
+    # 2. 🆕 คำนวณอุณหภูมิน้ำยาเหลวจริงหลังจากหักค่า Subcooling
+    t_liquid = Cond_temp - liquid_subcooling
+    
+    # Y: ความหนาแน่นของน้ำยาเหลวก่อนเข้าวาล์วที่อุณหภูมิซับคูลจริง (t_liquid)
+    Y = nh3_liquid_density(t_liquid)
+    
     t_intermediate = (Cond_temp + Evap_temp) / 2.0
     S = nh3_liquid_density(t_intermediate)
 
-    # 3. [ACCURATE ENTHALPY] คำนวณการแลกเปลี่ยนความร้อนอิงสเปก Liquid Injection ร่วมกับ Discharge Superheat
-    # h_f_in: เอนทัลปีของน้ำยาเหลวอิ่มตัวก่อนเข้าวาล์วที่อุณหภูมิ Tc
-    h_f_in = 200.0 + 4.63 * Cond_temp + 0.0025 * (Cond_temp ** 2)
+    # 3. [SUBCOOLED ENTHALPY] คำนวณเอนทัลปีอ้างอิงค่า Liquid Subcooling
+    # h_f_in: เอนทัลปีของน้ำยาเหลวที่อุณหภูมิ subcooled จริง ยิ่ง subcool มาก ค่านี้ยิ่งต่ำลง
+    h_f_in = 200.0 + 4.63 * t_liquid + 0.0025 * (t_liquid ** 2)
     
-    # h_g_out: เอนทัลปีของไอแอมโมเนียซูเปอร์ฮีตที่หลุดออกจากกระบวนการฉีดหล่อเย็น (ออกจาก Discharge Port)
-    h_g_sat = 1444.0 + 0.92 * Cond_temp - 0.004 * (Cond_temp ** 2) # ไออิ่มตัวที่แรงดันควบแน่น
-    cp_ammonia_gas = 2.9  # ค่าความร้อนจำเพาะโดยประมาณของแก๊ส R717 ที่ความดันช่วงคอยล์ร้อน (kJ/kg·K)
-    h_g_out = h_g_sat + (cp_ammonia_gas * discharge_sh) # รวมภาระพลังงานความร้อนซูเปอร์ฮีตตามสเปก MYCOMW
+    # h_g_out: เอนทัลปีของไอแอมโมเนียซูเปอร์ฮีตด้านส่งตามสเปก Discharge Superheat
+    h_g_sat = 1444.0 + 0.92 * Cond_temp - 0.004 * (Cond_temp ** 2) 
+    cp_ammonia_gas = 2.9  
+    h_g_out = h_g_sat + (cp_ammonia_gas * discharge_sh) 
     
     dh_loc = h_g_out - h_f_in
     G = (q_oil_kw / dh_loc) * 3600 if dh_loc > 0 else 0.0
@@ -212,7 +212,7 @@ if st.session_state.calculated:
         st.error("❌ ข้อผิดพลาด: ตรวจสอบระดับอุณหภูมิระบบ (อุณหภูมิควบแน่น Tc ต้องมีค่าสูงกว่าอุณหภูมิระเหย Te)")
         st.session_state.calculated = False
     else:
-        # สมการหลักคำนวณค่าสัมประสิทธิ์ความสามารถในการไหลของวาล์ว (Valve Cv Formula)
+        # คำนวณค่า Valve Cv
         part_1 = 1.17 * (G / (1000 * Y))
         part_2 = math.sqrt(S / dp_bar)
         cv_result = part_1 * part_2 * K
@@ -223,7 +223,7 @@ if st.session_state.calculated:
         res_col1.metric(f"Pressure Drop ตกคร่อมวาล์ว (ΔP)", f"{display_dp:.3f} {p_label}")
         res_col2.metric("ค่า CV รวมที่ต้องการจริง", f"{cv_result:.4f}")
         
-        st.success(f"📈 **วิเคราะห์เทคนิคเฉพาะทาง:** สภาวะ Liquid Injection โหลดน้ำมัน **{q_oil_kw:.2f} kW** (คุม Discharge Superheat **{discharge_sh:.1f} K**) แปลงเป็นอัตราการไหลแอมโมเนียหมุนเวียนจริง G = **{G:.2f} kg/hr**")
+        st.success(f"📈 **วิเคราะห์เทคนิคจำลอง:** โหลดน้ำมัน **{q_oil_kw:.2f} kW** | คุม Subcooling **{liquid_subcooling:.1f} K** ($T_{{liquid}} = {t_liquid:.1f}^\\circ C$) | คุม Discharge SH **{discharge_sh:.1f} K** -> อัตราไหลน้ำยาที่ต้องใช้จริง G = **{G:.2f} kg/hr**")
 
         # --- ค้นหาชุด Orifice แนะนำ 5 ลำดับแรก ---
         all_options = []
@@ -296,15 +296,13 @@ if st.session_state.calculated:
 
         # --- ระบบจัดทำไฟล์ส่งออกรายงานเทคนิค ---
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        hp_g_show = (HP_abs * 14.5038) - ATM_PSI if unit == "PSI" else HP_abs - ATM_BAR
-        lp_g_show = (LP_abs * 14.5038) - ATM_PSI if unit == "PSI" else LP_abs - ATM_BAR
-        p_label_g = "PSI G" if unit == "PSI" else "Bar G"
         
         log_content = (
             f"=== รายงานบันทึกการคำนวณและเลือกขนาดวาล์ว Yosaku ({current_time}) ===\n"
             f"รุ่นคอมเพรสเซอร์ MYCOM: {selected_model}\n"
             f"ระบบหล่อเย็นคอมเพรสเซอร์: WITH LIQUID INJECTION OIL COOLING\n"
             f"สภาวะทำงานที่ระบุ: Te = {Evap_temp:.1f} °C, Tc = {Cond_temp:.1f} °C\n"
+            f"ค่าควบคุมฝั่งน้ำยาเหลว: LIQUID SUBCOOLING = {liquid_subcooling:.1f} K (T_liquid = {t_liquid:.1f} °C)\n"
             f"ค่าควบคุมความร้อนระบบ: DISCHARGE SUPERHEAT = {discharge_sh:.1f} K\n"
             f"ค่าภาระความร้อนน้ำมันใช้งานจริง: {q_oil_kw:.2f} kW\n"
             f"คำนวณอัตราการไหลแอมโมเนียเหลว (G): {G:.2f} kg/h\n"
@@ -317,7 +315,7 @@ if st.session_state.calculated:
         st.download_button(
             label="📥 ดาวน์โหลดรายงานเทคนิค (Technical Spec Log)",
             data=log_content,
-            file_name=f"Yosaku_LI_Cooling_Report_{selected_model.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
+            file_name=f"Yosaku_Advanced_LI_Report_{selected_model.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
             mime="text/plain",
             use_container_width=True
         )
