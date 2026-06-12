@@ -5,15 +5,15 @@ import itertools
 from datetime import datetime
 
 # ========================================================
-# [CONFIG] ตั้งค่าความดันบรรยากาศอ้างอิงของบริษัท (หน้างาน)
+# [CONFIG] ตั้งค่าความดันบรรยากาศอ้างอิงหน้างาน
 # ========================================================
 ATM_BAR = 1.013    # มาตรฐานทั่วไปใช้ 1.013 Bar
 ATM_PSI = 14.70    # มาตรฐานฝั่ง PSI
 
 # ตั้งค่าหน้าตาของ Web App
 st.set_page_config(
-    page_title="Yosaku Selection Pro (MYCOMW Engine)",
-    page_icon="👨‍🔧",
+    page_title="Yosaku Selection Pro (Easiest & Accurate)",
+    page_icon="⚙️",
     layout="centered",
     initial_sidebar_state="collapsed"
 )
@@ -32,7 +32,7 @@ COLOR_MAP = {
     "ใหญ่เกินไป": "background-color: #ffffff; color: #6c757d;"
 }
 
-# 💾 ฐานข้อมูลภาระความร้อนน้ำมันมาตรฐานที่สภาวะอ้างอิง (Rating Condition: Te -10°C / Tc 35°C)
+# 💾 ฐานข้อมูลภาระความร้อนน้ำมันมาตรฐานประจำรุ่น (Rating Condition: Te -10°C / Tc 35°C)
 MYCOM_BASE_OIL_REJECTION = {
     # --- 160 Series ---
     "MYCOM 160 VMS": 32.0, "MYCOM 160 VMD": 45.0, "MYCOM 160 VLD": 58.0,
@@ -56,9 +56,9 @@ if "calculated" not in st.session_state:
 def reset_calculation():
     st.session_state.calculated = False
 
-# 🧪 [MYCOM CORE] ฟังก์ชันแปลงคุณสมบัติทางเทอร์โมไดนามิกส์ R717 (Ammonia)
+# 🧪 [THERMO FORMULA] ฟังก์ชันคำนวณคุณสมบัติน้ำยา R717 (Ammonia)
 def nh3_temp_to_bar_abs(t_c):
-    """แปลงอุณหภูมิอิ่มตัว (°C) -> ความดันสัมบูรณ์ (Bar Absolute) อิงตามตารางคุณสมบัติน้ำยา"""
+    """แปลงอุณหภูมิอิ่มตัว (°C) -> ความดันสัมบูรณ์ (Bar Absolute)"""
     return (3.26631702e-08 * t_c**4 + 
             1.54531857e-05 * t_c**3 + 
             2.34641900e-03 * t_c**2 + 
@@ -69,33 +69,30 @@ def nh3_liquid_density(t_c):
     """คำนวณความหนาแน่นสารทำความเย็น R717 Liquid (kg/L)"""
     return 0.6386 - 0.00138 * t_c - 0.0000025 * (t_c ** 2)
 
-# 📊 [MYCOMW EMULATOR] ฟังก์ชันคำนวณโหลดความร้อนน้ำมันแบบแปรผันตามสภาวะหน้างานจริง
-def simulate_mycomw_oil_heat(model, te, tc, has_eco):
-    """คำนวณค่า Detail Oil Heat Rejection (kW) ล้อตามพฤติกรรมโปรแกรม MYCOMW"""
+# 📊 [DYNAMIC ESTIMATOR] ระบบจำลองโหลดความร้อนน้ำมันตามสภาวะจริง
+def estimate_oil_heat(model, te, tc, has_eco):
+    """คำนวณแนวโน้มค่า Oil Heat Rejection (kW) ให้สอดคล้องตามสภาวะ Te, Tc และ Economizer"""
     base_kw = MYCOM_BASE_OIL_REJECTION.get(model, 100.0)
-    
     pe = nh3_temp_to_bar_abs(te)
     pc = nh3_temp_to_bar_abs(tc)
-    compression_ratio = pc / pe if pe > 0 else 1.0
     
-    # สภาวะอ้างอิงเทียบมาตรฐานฐานข้อมูล (-10 °C / 35 °C)
+    # สภาวะอ้างอิงมาตรฐาน (-10°C / 35°C)
     pe_ref = nh3_temp_to_bar_abs(-10.0)
     pc_ref = nh3_temp_to_bar_abs(35.0)
-    cr_ref = pc_ref / pe_ref
     
     p_diff_ratio = (pc - pe) / (pc_ref - pe_ref) if (pc_ref - pe_ref) > 0 else 1.0
-    cr_ratio = compression_ratio / cr_ref
+    cr_ratio = (pc / pe) / (pc_ref / pe_ref) if pe > 0 else 1.0
     
-    # ภาระความร้อนของน้ำมันจะแปรผันตรงตาม Pressure Differential และ Compression Work
-    simulated_kw = base_kw * (p_diff_ratio ** 0.75) * (cr_ratio ** 0.35)
+    # คำนวณโหลดแปรผันตามแรงดันและอัตราการอัด
+    estimated_kw = base_kw * (p_diff_ratio ** 0.75) * (cr_ratio ** 0.35)
     
-    # หากระบบเปิดใช้ Economizer แก๊สบางส่วนจะเข้ามาช่วยลดอุณหภูมิหน้าพอร์ตด้านส่ง ทำให้ Oil Load ลดลงเล็กน้อย
+    # ปรับลดโหลดน้ำมันลงเล็กน้อยหากเปิดใช้ Economizer (เนื่องจากแก๊สเย็นเข้ามาช่วยซับความร้อนบางส่วน)
     if has_eco:
-        simulated_kw *= 0.86  
+        estimated_kw *= 0.86
         
-    return max(5.0, simulated_kw)
+    return max(5.0, estimated_kw)
 
-# --- ฟังก์ชันช่วยแสดงผลตารางวาล์ว ---
+# --- ฟังก์ชันจัดการแสดงผลและตาราง ---
 def get_suitability_score(pct, is_single):
     if pct > 87: return -1
     penalty = 0 if is_single else 5
@@ -120,92 +117,77 @@ def color_matrix_cells(val):
 
 
 # ========================================================
-# ส่วนหัวของโปรแกรม (Header)
+# ส่วนแสดงผลหลักบนหน้าเว็บ (UI)
 # ========================================================
 st.title("💻⚙️ Yosaku Selection Pro")
-st.caption("🚀 เวอร์ชันอัจฉริยะ: จำลองสมการคำนวณ Oil Heat Rejection (kW) อัตโนมัติจากโปรแกรม MYCOMW.exe")
+st.subheader("โปรแกรมเลือกขนาดวาล์วสำหรับชุดระบายความร้อนน้ำมัน (Oil Cooler)")
 st.caption("⚙️ Mayekawa (Thailand) Co., Ltd.")
+st.markdown("---")
+
+# 🔘 ส่วนที่ 1: ป้อนสภาวะหน้างาน (ง่ายและเร็ว)
+st.subheader("🌡️ 1. ป้อนข้อมูลสภาวะทำงานจริงหน้างาน (Operating Conditions)")
+
+col_input1, col_input2 = st.columns(2)
+with col_input1:
+    selected_model = st.selectbox("เลือกรุ่นคอมเพรสเซอร์ MYCOM:", list(MYCOM_BASE_OIL_REJECTION.keys()), on_change=reset_calculation)
+    Evap_temp = st.number_input("อุณหภูมิระเหย Te (°C):", min_value=-50.0, max_value=20.0, value=-10.0, step=0.5, on_change=reset_calculation)
+
+with col_input2:
+    has_eco = st.checkbox("⚡ เปิดใช้งานระบบ Economizer (ECO Port)", value=False, on_change=reset_calculation)
+    st.write("") # เว้นระยะ
+    Cond_temp = st.number_input("อุณหภูมิควบแน่น Tc (°C):", min_value=10.0, max_value=60.0, value=35.0, step=0.5, on_change=reset_calculation)
 
 st.markdown("---")
 
-# 🔘 ส่วนที่ 1: การเลือกรุ่นคอมเพรสเซอร์
-st.subheader("📊 1. เลือกรุ่นคอมเพรสเซอร์หน้างาน")
-selected_model = st.selectbox(
-    "กรุณาเลือกรุ่นคอมเพรสเซอร์ MYCOM:",
-    list(MYCOM_BASE_OIL_REJECTION.keys()),
+# 🔘 ส่วนที่ 2: ค่า Oil Heat Rejection (คำนวณให้อัตโนมัติ + ปรับแก้เองได้เพื่อให้แม่นยำ 100%)
+st.subheader("🔥 2. ภาระความร้อนน้ำมัน (Oil Heat Rejection)")
+
+# ระบบคำนวณค่าไกด์ไลน์จากสภาวะด้านบนให้อัตโนมัติ (Easiest)
+auto_computed_kw = estimate_oil_heat(selected_model, Evap_temp, Cond_temp, has_eco)
+
+# เปิดช่องให้กรอกตัวเลขจริงจากโปรแกรม MYCOMW ทับได้ทันทีเพื่อความเป๊ะ (Most Accurate)
+q_oil_kw = st.number_input(
+    "Detail Oil Heat Rejection (kW):",
+    min_value=5.0,
+    max_value=1500.0,
+    value=float(auto_computed_kw),
+    step=0.1,
+    format="%.2f",
+    help="ระบบคำนวณค่าแนะนำเบื้องต้นให้แล้ว หากพี่มีใบ Data Sheet จากโปรแกรม MYCOMW สามารถพิมพ์ตัวเลขจริงทับลงไปในช่องนี้ได้เลยครับ เพื่อความแม่นยำ 100%",
     on_change=reset_calculation
 )
 
-st.markdown("---")
-
-# 🔘 ส่วนที่ 2: ป้อนข้อมูลอุณหภูมิระบบตามที่ผู้ใช้งานระบุ (Te, Tc, Eco)
-st.subheader("🌡️ 2. สภาวะทำงานเพื่อคำนวณโหลดความร้อนน้ำมัน (MYCOMW Parameters)")
-col_t1, col_t2 = st.columns(2)
-with col_t1:
-    Evap_temp = st.number_input("อุณหภูมิระเหย Evaporating Temp Te (°C):", min_value=-50.0, max_value=20.0, value=-10.0, step=0.5, on_change=reset_calculation)
-with col_t2:
-    Cond_temp = st.number_input("อุณหภูมิควบแน่น Condensing Temp Tc (°C):", min_value=10.0, max_value=60.0, value=35.0, step=0.5, on_change=reset_calculation)
-
-# ตัวเลือก Economizer ตามความต้องการของพี่
-has_eco = st.checkbox("⚙️ คอมเพรสเซอร์เครื่องนี้เปิดใช้งานชุด Economizer (ECO Port)", value=False, on_change=reset_calculation)
-
-# จัดการพอร์ตส่งไอสารทำความเย็นกลับอิงตามปุ่ม Economizer ข้างต้น
-loc_return_port = "ส่งกลับฝั่ง Economizer (ECO Port)" if has_eco else "ส่งกลับฝั่ง Suction (LP Port)"
-
-st.markdown("---")
-
-# 🔘 ส่วนที่ 3: ระบบคำนวณภาระความร้อนน้ำมันอัตโนมัติ (แปลงข้อมูลจาก MYCOMW เป็นค่าใช้งานจริง)
-st.subheader("🔥 3. ผลลัพธ์ภาระความร้อนน้ำมัน (Oil Heat Rejection)")
-
-# คำนวณค่าจากสมการจำลองโมเดลคอมเพรสเซอร์
-computed_oil_kw = simulate_mycomw_oil_heat(selected_model, Evap_temp, Cond_temp, has_eco)
-
-# ทำระบบตรวจสอบแบบเผื่อเลือก (Manual Override) เผื่อพี่ต้องการกรอกตัวเลขจริงเป๊ะๆ จากหน้าพิมพ์เอกสาร MYCOMW
-manual_override = st.checkbox("✍️ ติ๊กที่นี่หากต้องการปรับแก้/กรอกค่าโหลด kW ด้วยตนเอง (Manual Override)", value=False)
-
-if manual_override:
-    q_oil_kw = st.number_input(
-        "ระบุค่า Oil Heat Rejection ปรับแต่งเอง (kW):",
-        min_value=5.0, max_value=1500.0, value=float(computed_oil_kw), step=1.0,
-        on_change=reset_calculation
-    )
+if abs(q_oil_kw - auto_computed_kw) < 0.01:
+    st.caption("ℹ️ *ปัจจุบันระบบใช้ค่าโหลดจากการคำนวณอัตโนมัติอ้างอิงตามสภาวะ Te/Tc*")
 else:
-    q_oil_kw = computed_oil_kw
-    st.info(f"💡 **ประมวลผลสำเร็จ:** อ้างอิงสภาวะ Te {Evap_temp}°C / Tc {Cond_temp}°C {'ร่วมกับระบบ ECO' if has_eco else ''} -> โหลดระบายความร้อนน้ำมันคำนวณได้เป็น **{q_oil_kw:.2f} kW**")
+    st.caption("⚠️ *ปัจจุบันระบบใช้ค่าโหลดที่คุณกรอกปรับแต่งเอง (Manual Override)*")
 
 st.markdown("---")
 
-# 🔘 ส่วนที่ 4: สัมประสิทธิ์และหน่วยความดันระบายน้ำยา
-st.subheader("🧪 4. ข้อมูลและหน่วยสำหรับคำนวณขนาดพอร์ตวาล์ว")
-unit = st.radio("เลือกหน่วยความดันแสดงผลบนหน้าจอรายงาน:", ["Bar", "PSI"], horizontal=True, on_change=reset_calculation)
-
-# คำนวณสัมประสิทธิ์ความหนาแน่นน้ำยาแอมโมเนีย
-Y = nh3_liquid_density(Cond_temp)
-if has_eco:
-    loc_evap_t = (Cond_temp + Evap_temp) / 2.0
-    S = nh3_liquid_density(loc_evap_t)
-else:
-    S = nh3_liquid_density(Evap_temp)
-
-col_prop1, col_prop2 = st.columns(2)
-with col_prop1:
-    st.number_input("Y: ความหนาแน่นสารขาก่อนเข้าวาล์ว (kg/L):", value=float(Y), format="%.3f", disabled=True)
-    K = st.number_input("ค่าปรับแก้ความปลอดภัย K Factor:", min_value=0.1, value=1.0, step=0.05, on_change=reset_calculation)
-with col_prop2:
-    st.number_input("S: ความหนาแน่นสารขาออกจากวาล์ว (kg/L):", value=float(S), format="%.3f", disabled=True)
+# 🔘 ส่วนที่ 3: ตัวเลือกหน่วยและการคำนวณเสริม
+st.subheader("🧪 3. ค่าสัมประสิทธิ์และหน่วยแสดงผล")
+unit = st.radio("เลือกหน่วยแรงดันในหน้าจอรายงาน:", ["Bar", "PSI"], horizontal=True, on_change=reset_calculation)
+K = st.number_input("ค่าปรับแก้ความปลอดภัย (K Factor):", min_value=0.1, value=1.0, step=0.05, on_change=reset_calculation)
 
 st.markdown("---")
 
-# ปุ่มประมวลผลหลัก
+# ปุ่มกดคำนวณหลัก
 if st.button("🚀 CALCULATE VALVE SIZING", type="primary", use_container_width=True):
     st.session_state.calculated = True
 
-# --- กระบวนการประมวลผลหลังกดคำนวณ ---
+# --- กระบวนการประมวลผลทางวิศวกรรม ---
 if st.session_state.calculated:
     
-    # 🧮 ส่วนที่ 4.1: คำนวณหาค่าอัตราไหลน้ำยา G (kg/hr) ตามเอนทัลปีสารที่เปลี่ยนไปจริง
+    # 1. คำนวณความหนาแน่นสารทำความเย็น R717
+    Y = nh3_liquid_density(Cond_temp)
+    if has_eco:
+        t_loc_evap = (Cond_temp + Evap_temp) / 2.0
+        S = nh3_liquid_density(t_loc_evap)
+    else:
+        S = nh3_liquid_density(Evap_temp)
+
+    # 2. คำนวณหาค่า Enthalpy เพื่อแปลง kW เป็นอัตราไหลน้ำยา G (kg/hr)
     h_f_in = 200.0 + 4.63 * Cond_temp + 0.0025 * (Cond_temp ** 2)
-    
     if has_eco:
         t_loc_evap = (Cond_temp + Evap_temp) / 2.0
         h_g_out = 1461.9 + 1.05 * t_loc_evap - 0.0085 * (t_loc_evap ** 2)
@@ -213,12 +195,9 @@ if st.session_state.calculated:
         h_g_out = 1461.9 + 1.05 * Evap_temp - 0.0085 * (Evap_temp ** 2)
         
     dh_loc = h_g_out - h_f_in
-    if dh_loc > 0:
-        G = (q_oil_kw / dh_loc) * 3600
-    else:
-        G = 0.0
+    G = (q_oil_kw / dh_loc) * 3600 if dh_loc > 0 else 0.0
 
-    # แปลงแรงดันเกจสำหรับโชว์รายงานข้อมูลหน้างาน
+    # 3. คำนวณความดันสัมบูรณ์และ Pressure Drop
     HP_abs = nh3_temp_to_bar_abs(Cond_temp)
     LP_abs = nh3_temp_to_bar_abs(Evap_temp)
     dp_bar = HP_abs - LP_abs
@@ -227,21 +206,21 @@ if st.session_state.calculated:
     p_label = "PSI" if unit == "PSI" else "Bar"
 
     if G <= 0 or HP_abs <= LP_abs:
-        st.error("❌ ข้อผิดพลาด: ตรวจสอบอุณหภูมิหน้างานอีกครั้ง (อุณหภูมิควบแน่น Tc ต้องสูงกว่าอุณหภูมิระเหย Te)")
+        st.error("❌ ข้อผิดพลาด: กรุณาตรวจสอบอุณหภูมิ Tc และ Te (ค่าความดันขาออกต้องไม่สูงกว่าขาเข้า)")
         st.session_state.calculated = False
     else:
-        # สูตรหลักการคำนวณค่าสัมประสิทธิ์วาล์ว (Cv Sizing Formula)
+        # สูตรวิศวกรรมหลักในการหาค่า Cv ของวาล์วหรี่น้ำยา
         part_1 = 1.17 * (G / (1000 * Y))
         part_2 = math.sqrt(S / dp_bar)
         cv_result = part_1 * part_2 * K
 
         # แสดงผลลัพธ์หลักบน UI
-        st.subheader("📊 สรุปผลการคำนวณและเลือกขนาดพอร์ตวาล์ว")
+        st.subheader("📊 สรุปผลการคัดเลือกพอร์ตวาล์ว Yosaku")
         res_col1, res_col2 = st.columns(2)
         res_col1.metric(f"Pressure Drop รวม (ΔP)", f"{display_dp:.3f} {p_label}")
-        res_col2.metric("ค่า CV ที่ระบบต้องการรวม", f"{cv_result:.4f}")
+        res_col2.metric("ค่า CV รวมที่ต้องการจริง", f"{cv_result:.4f}")
         
-        st.success(f"📈 **สรุปการวิเคราะห์เชิงเทคนิค:** โหลดน้ำมันจากสภาวะดีไซน์ **{q_oil_kw:.2f} kW** ส่งผลให้เกิดอัตราการไหลน้ำยาแอมโมเนียระบายความร้อน G = **{G:.2f} kg/hr**")
+        st.success(f"📈 **ข้อมูลทางเทคนิคหลัก:** โหลดน้ำมันทำงาน **{q_oil_kw:.2f} kW** ทำให้อัตราไหลแอมโมเนียระบายความร้อนหมุนเวียน G = **{G:.2f} kg/hr**")
 
         # --- ค้นหาชุด Orifice แนะนำ 5 ลำดับแรก ---
         all_options = []
@@ -261,7 +240,7 @@ if st.session_state.calculated:
 
         all_options.sort(key=lambda x: x[0], reverse=True)
         
-        st.info("🏆 **รูปแบบขนาด Orifice แนะนำที่ดีที่สุด 5 อันดับแรก (เกณฑ์ปลอดภัย: คุมเปอร์เซ็นต์เปิดช่วง 80% - 85%)**")
+        st.info("🏆 **ขนาด Orifice แนะนำที่ดีที่สุด 5 อันดับแรก (คุมเปอร์เซ็นต์เปิดช่วงเซฟโซน 80% - 85%)**")
         if all_options:
             recommendation_text = ""
             rank_emojis = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣"]
@@ -271,7 +250,7 @@ if st.session_state.calculated:
                 recommendation_text += f"อันดับ {i+1}: {label}\n"
         else:
             qty_needed = math.ceil(cv_result / 0.48)
-            recommendation_text = f"ไม่มีขนาดเดี่ยวหรือคู่ที่เปิดอยู่ในเกณฑ์ปลอดภัย -> แนะนำให้ขนานพอร์ตเพิ่มเป็น {qty_needed} x JH"
+            recommendation_text = f"พอร์ตมาตรฐานรองรับไม่พอ -> แนะนำเพิ่มพอร์ตขนานขนาดใหญ่เป็น {qty_needed} x JH"
             st.error(f"⚠️ {recommendation_text}")
 
         def get_status_text(pct):
@@ -280,7 +259,7 @@ if st.session_state.calculated:
             elif 85 < pct <= 100: return "ใกล้เต็ม"
             else: return "ใหญ่เกินไป"
 
-        # --- ตารางวิเคราะห์เปรียบเทียบพอร์ตมาตรฐาน ---
+        # --- ตารางอ้างอิงเปรียบเทียบพอร์ตมาตรฐาน ---
         st.subheader("📋 ตารางอ้างอิงเปอร์เซ็นต์เปิด: แบบติดตั้งตัวเดียว VS ติดตั้งขนาน 2 ตัว")
         baseline_rows = []
         for name, max_cv in ORIFICE_DATA:
@@ -297,7 +276,7 @@ if st.session_state.calculated:
         })
         st.dataframe(styled_base, use_container_width=True, hide_index=True)
 
-        # --- ตารางเมทริกซ์คละรุ่นแบบละเอียด ---
+        # --- ตารางเมทริกซ์คละรุ่นผสม ---
         st.subheader("🗺️ ตารางเมทริกซ์เปอร์เซ็นต์เปิดรวม (จับคู่คละรุ่นผสม 2 ตัว)")
         matrix_dict = {}
         for name1, cv1 in ORIFICE_DATA:
@@ -312,7 +291,7 @@ if st.session_state.calculated:
             styled_matrix = df_matrix.style.applymap(color_matrix_cells).format("{:.1f}%")
         st.dataframe(styled_matrix, use_container_width=True)
 
-        # --- ระบบจัดทำไฟล์รายงาน (Log File) ---
+        # --- ดาวน์โหลดรายงานข้อมูลเทคนิค ---
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         hp_g_show = (HP_abs * 14.5038) - ATM_PSI if unit == "PSI" else HP_abs - ATM_BAR
         lp_g_show = (LP_abs * 14.5038) - ATM_PSI if unit == "PSI" else LP_abs - ATM_BAR
@@ -320,13 +299,12 @@ if st.session_state.calculated:
         
         log_content = (
             f"=== บันทึกรายงานการคัดเลือกขนาดวาล์ว Yosaku ({current_time}) ===\n"
-            f"รุ่นคอมเพรสเซอร์ MYCOM ที่เลือก: {selected_model}\n"
-            f"สภาวะควบคุมฝั่งอุณหภูมิ: Te = {Evap_temp:.1f} °C, Tc = {Cond_temp:.1f} °C\n"
-            f"สถานะระบบ Economizer: {'เปิดใช้งาน (ECO Port)' if has_eco else 'ปิดใช้งาน (Single Stage)'}\n"
-            f"ค่าภาระความร้อนน้ำมันคำนวณจริง: {q_oil_kw:.2f} kW\n"
-            f"คำนวณอัตราการไหลน้ำยาแอมโมเนียระบายความร้อนได้ (G): {G:.2f} kg/h\n"
-            f"แรงดันเกจหน้างานโดยประมาณ: HP={hp_g_show:.3f} {p_label_g}, LP={lp_g_show:.3f} {p_label_g}\n"
-            f"ผลรวมค่าความต้องการ CV ทางวิศวกรรม: {cv_result:.4f}\n"
+            f"รุ่นคอมเพรสเซอร์ MYCOM: {selected_model}\n"
+            f"สภาวะระบบ: Te = {Evap_temp:.1f} °C, Tc = {Cond_temp:.1f} °C\n"
+            f"ระบบ Economizer: {'เปิดใช้งาน' if has_eco else 'ปิดใช้งาน'}\n"
+            f"ค่าภาระความร้อนน้ำมันที่คำนวณใช้งาน: {q_oil_kw:.2f} kW\n"
+            f"อัตราไหลแอมโมเนียระบายความร้อน (G): {G:.2f} kg/h\n"
+            f"ค่าความต้องการ CV รวมทางวิศวกรรม: {cv_result:.4f}\n"
             f"--------------------------------------------------\n"
             f"ผลการคัดเลือก Orifice แนะนำ:\n{recommendation_text}"
             f"--------------------------------------------------\n"
@@ -334,7 +312,7 @@ if st.session_state.calculated:
         st.download_button(
             label="📥 ดาวน์โหลดรายงานเทคนิค (Technical Spec Log)",
             data=log_content,
-            file_name=f"Yosaku_MYCOMW_Calculated_{selected_model.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
+            file_name=f"Yosaku_Report_{selected_model.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
             mime="text/plain",
             use_container_width=True
         )
