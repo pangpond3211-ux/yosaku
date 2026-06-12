@@ -34,6 +34,10 @@ COLOR_MAP = {
     "ใหญ่เกินไป": "background-color: #ffffff; color: #6c757d;"
 }
 
+# 🔹 ระบบจำสถานะ (Session State) ป้องกันหน้าจอหายตอนกด Download Log
+if "calculated" not in st.session_state:
+    st.session_state.calculated = False
+
 def get_suitability_score(pct, is_single):
     if pct > 87: 
         return -1
@@ -76,6 +80,7 @@ else:
 st.title("💻⚙️ Yosaku Selection")
 st.caption("พัฒนาโดย Chattrawat Khamsee | เวอร์ชัน Web App สำหรับมือถือ")
 st.caption("⚙️ Mayekawa (Thailand) Co., Ltd.")
+
 # 📖 ส่วนแสดงสมการหลัก
 st.markdown("### 📊 สมการอ้างอิงการคำนวณ (Formula)")
 st.latex(r"C_v = 1.17 \times \left( \frac{G}{1000 \times Y} \right) \times \sqrt{\frac{S}{HP - LP}} \times K")
@@ -112,7 +117,6 @@ input_mode = st.radio(
 
 unit = st.radio("เลือกหน่วยความดันแสดงผล:", ["Bar", "PSI"], horizontal=True)
 
-# [FIXED] ปรับค่า Default ให้ถอดรูทกลับไปเท่ากับแอปตัวแรกของพี่เป๊ะๆ
 p_label = "Bar G" if unit == "Bar" else "PSI G"
 min_p = -ATM_BAR if unit == "Bar" else -ATM_PSI
 hp_default = (14.7 - ATM_BAR) if unit == "Bar" else 0.0
@@ -132,8 +136,14 @@ else:
     with col2:
         Evap_temp = st.number_input("อุณหภูมิระเหย Evaporating Temp Te (°C):", min_value=-50.0, max_value=60.0, value=-10.0, step=1.0)
 
-# ปุ่มคำนวณ
+# เมื่อมีการเปลี่ยนแปลงค่าอินพุตใด ๆ ให้เคลียร์สถานะเก่าเพื่อให้ผู้ใช้กดคำนวณใหม่เพื่ออัปเดตข้อมูลสัมพัทธ์
+# (หมายเหตุ: โค้ดส่วนนี้ปล่อยให้ทำงานแบบไดนามิกได้ หรือจะกดปุ่มเพื่อล็อกค่าก็ได้)
+
 if st.button("🚀 CALCULATE", type="primary", use_container_width=True):
+    st.session_state.calculated = True
+
+# --- ส่วนการคำนวณและแสดงผลลัพธ์ ---
+if st.session_state.calculated:
     # แปลงจาก Gauge ให้เป็น Bar Absolute สำหรับใช้คำนวณในสูตรหลัก
     if input_mode == "วิธีที่ 1: ป้อนด้วยความดันเกจโดยตรง (HP / LP)":
         if unit == "PSI":
@@ -149,8 +159,10 @@ if st.button("🚀 CALCULATE", type="primary", use_container_width=True):
     # ตรวจสอบความถูกต้องขั้นต้น
     if G <= 0:
         st.warning("⚠️ กรุณากรอกอัตราไหลสารทำความเย็น G ให้มากกว่า 0")
+        st.session_state.calculated = False
     elif HP <= LP:
         st.error("❌ ข้อผิดพลาด: ความดันขาเข้า (HP) ต้องมากกว่าความดันขาออก (LP)")
+        st.session_state.calculated = False
     else:
         display_dp = (HP - LP) * 14.5038 if unit == "PSI" else (HP - LP)
         
