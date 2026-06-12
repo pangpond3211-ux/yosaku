@@ -34,8 +34,12 @@ COLOR_MAP = {
     "ใหญ่เกินไป": "background-color: #ffffff; color: #6c757d;"
 }
 
-# 🔹 ระบบจำสถานะ (Session State) ป้องกันหน้าจอหายตอนกด Download Log
+# 🔹 1. ระบบจำสถานะและฟังก์ชันเคลียร์ค่าเมื่ออินพุตเปลี่ยน (Reset Callback)
 if "calculated" not in st.session_state:
+    st.session_state.calculated = False
+
+def reset_calculation():
+    """ฟังก์ชันสำหรับสั่งให้ซ่อนผลลัพธ์ทันทีเมื่อมีการเปลี่ยนอินพุต"""
     st.session_state.calculated = False
 
 def get_suitability_score(pct, is_single):
@@ -96,26 +100,27 @@ st.markdown("""
 
 st.markdown("---")
 
-# 🔘 ส่วนร่วม: ป้อนข้อมูลพื้นฐาน
+# 🔘 ส่วนร่วม: ป้อนข้อมูลพื้นฐาน (ใส่ on_change เพื่อตรวจจับการแก้ไขค่า)
 st.subheader("📋 กรอกข้อมูลคุณสมบัติระบบ")
 col_g1, col_g2 = st.columns(2)
 with col_g1:
-    G = st.number_input("G: Ref. flow rate (kg/hr):", min_value=0.0, value=1000.0, step=10.0)
-    Y = st.number_input("Y: Specific weight before valve:", min_value=0.01, value=0.583, step=0.01, format="%.3f")
+    G = st.number_input("G: Ref. flow rate (kg/hr):", min_value=0.0, value=1000.0, step=10.0, on_change=reset_calculation)
+    Y = st.number_input("Y: Specific weight before valve:", min_value=0.01, value=0.583, step=0.01, format="%.3f", on_change=reset_calculation)
 with col_g2:
-    K = st.number_input("ค่าปรับแก้ K Factor:", min_value=0.0, value=1.0, step=0.1)
-    S = st.number_input("S: Specific weight after valve:", min_value=0.01, value=0.583, step=0.01, format="%.3f")
+    K = st.number_input("ค่าปรับแก้ K Factor:", min_value=0.0, value=1.0, step=0.1, on_change=reset_calculation)
+    S = st.number_input("S: Specific weight after valve:", min_value=0.01, value=0.583, step=0.01, format="%.3f", on_change=reset_calculation)
 
 st.markdown("---")
 
-# 🔘 ส่วนเลือกวิธีการป้อนสภาวะความดัน
+# 🔘 ส่วนเลือกวิธีการป้อนสภาวะความดัน (ใส่ on_change ทั้งโหมดและหน่วย)
 input_mode = st.radio(
     "เลือกวิธีระบุสภาวะความดัน:",
     ["วิธีที่ 1: ป้อนด้วยความดันเกจโดยตรง (HP / LP)", "วิธีที่ 2: ป้อนด้วยอุณหภูมิแอมโมเนีย (Tc / Te)"],
-    horizontal=False
+    horizontal=False,
+    on_change=reset_calculation
 )
 
-unit = st.radio("เลือกหน่วยความดันแสดงผล:", ["Bar", "PSI"], horizontal=True)
+unit = st.radio("เลือกหน่วยความดันแสดงผล:", ["Bar", "PSI"], horizontal=True, on_change=reset_calculation)
 
 p_label = "Bar G" if unit == "Bar" else "PSI G"
 min_p = -ATM_BAR if unit == "Bar" else -ATM_PSI
@@ -127,18 +132,16 @@ col1, col2 = st.columns(2)
 
 if input_mode == "วิธีที่ 1: ป้อนด้วยความดันเกจโดยตรง (HP / LP)":
     with col1:
-        HP_input = st.number_input(f"ความดันขาเข้า HP ({p_label}):", min_value=float(min_p), value=float(hp_default), step=p_step, format="%.3f")
+        HP_input = st.number_input(f"ความดันขาเข้า HP ({p_label}):", min_value=float(min_p), value=float(hp_default), step=p_step, format="%.3f", on_change=reset_calculation)
     with col2:
-        LP_input = st.number_input(f"ความดันขาออก LP ({p_label}):", min_value=float(min_p), value=float(lp_default), step=p_step, format="%.3f")
+        LP_input = st.number_input(f"ความดันขาออก LP ({p_label}):", min_value=float(min_p), value=float(lp_default), step=p_step, format="%.3f", on_change=reset_calculation)
 else:
     with col1:
-        Cond_temp = st.number_input("อุณหภูมิควบแน่น Condensing Temp Tc (°C):", min_value=-50.0, max_value=60.0, value=38.0, step=1.0)
+        Cond_temp = st.number_input("อุณหภูมิควบแน่น Condensing Temp Tc (°C):", min_value=-50.0, max_value=60.0, value=38.0, step=1.0, on_change=reset_calculation)
     with col2:
-        Evap_temp = st.number_input("อุณหภูมิระเหย Evaporating Temp Te (°C):", min_value=-50.0, max_value=60.0, value=-10.0, step=1.0)
+        Evap_temp = st.number_input("อุณหภูมิระเหย Evaporating Temp Te (°C):", min_value=-50.0, max_value=60.0, value=-10.0, step=1.0, on_change=reset_calculation)
 
-# เมื่อมีการเปลี่ยนแปลงค่าอินพุตใด ๆ ให้เคลียร์สถานะเก่าเพื่อให้ผู้ใช้กดคำนวณใหม่เพื่ออัปเดตข้อมูลสัมพัทธ์
-# (หมายเหตุ: โค้ดส่วนนี้ปล่อยให้ทำงานแบบไดนามิกได้ หรือจะกดปุ่มเพื่อล็อกค่าก็ได้)
-
+# ปุ่มคำนวณ
 if st.button("🚀 CALCULATE", type="primary", use_container_width=True):
     st.session_state.calculated = True
 
