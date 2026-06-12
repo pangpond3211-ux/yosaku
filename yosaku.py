@@ -32,18 +32,42 @@ COLOR_MAP = {
     "ใหญ่เกินไป": "background-color: #ffffff; color: #6c757d;"
 }
 
-# 💾 ฐานข้อมูลเชิงวิศวกรรม: Detail Oil Heat Rejection (kW) ของ MYCOM Compressor
-# (เป็นค่ามาตรฐานที่มีการเผื่อ Safety Factor สำหรับการเลือกขนาดวาล์วควบคุมน้ำมันหล่อลื่น)
+# 💾 ฐานข้อมูลเชิงวิศวกรรม: ค่าแนะนำ Detail Oil Heat Rejection (kW) เบื้องต้นของ MYCOM
 MYCOM_OIL_REJECTION_DB = {
+    # --- 160 Series ---
     "MYCOM 160 VMS": 32.0,
     "MYCOM 160 VMD": 45.0,
     "MYCOM 160 VLD": 58.0,
+    
+    # --- 170 J-Series ---
+    "MYCOM 170JS-V": 55.0,
+    "MYCOM 170JM-V": 65.0,
+    "MYCOM 170JL-V": 75.0,
+    
+    # --- 200 Series ---
     "MYCOM 200 VSD": 65.0,
     "MYCOM 200 VMD": 88.0,
     "MYCOM 200 VLD": 110.0,
+    
+    # --- 220 J-Series ---
+    "MYCOM 220JS-V": 105.0,
+    "MYCOM 220JM-V": 125.0,
+    "MYCOM 220JL-V": 145.0,
+    
+    # --- 250 Series ---
     "MYCOM 250 VSD": 135.0,
     "MYCOM 250 VMD": 170.0,
-    "MYCOM 250 VLD": 210.0
+    "MYCOM 250 VLD": 210.0,
+    
+    # --- 280 J-Series ---
+    "MYCOM 280JS-V": 195.0,
+    "MYCOM 280JM-V": 230.0,
+    "MYCOM 280JL-V": 265.0,
+    
+    # --- 320 Series ---
+    "MYCOM 320 VSD": 245.0,
+    "MYCOM 320 VMD": 295.0,
+    "MYCOM 320 VLD": 350.0
 }
 
 # 🔹 ระบบจำสถานะคำนวณ
@@ -94,24 +118,32 @@ def color_matrix_cells(val):
 # ส่วนหัวของโปรแกรม (Header)
 # ========================================================
 st.title("💻⚙️ Yosaku Selection Pro")
-st.caption("เวอร์ชันอัปเกรดอัตโนมัติ: ดึงค่าจาก Detail Oil Heat Rejection (Discharge Superheat 20K)")
+st.caption("🚀 เวอร์ชันความแม่นยำสูง: ดึงค่าเริ่มต้นอัตโนมัติ + รองรับการปรับแก้โหลด kW ตามสภาวะ Te/Tc จริงจาก MYCOMW")
 st.caption("⚙️ Mayekawa (Thailand) Co., Ltd.")
 
 st.markdown("---")
 
-# 🔘 ส่วนที่ 1: เลือกรุ่นคอมเพรสเซอร์เพื่อหาค่า Oil Heat Rejection โดยตรง
-st.subheader("📊 1. เลือกรุ่นคอมเพรสเซอร์ MYCOM (Compressor Selection)")
+# 🔘 ส่วนที่ 1: เลือกรุ่นคอมเพรสเซอร์ & หยอดโหลดความร้อนน้ำมัน
+st.subheader("📊 1. เลือกรุ่นคอมเพรสเซอร์ & โหลดความร้อนน้ำมัน (Oil Heat Load)")
 selected_model = st.selectbox(
     "กรุณาเลือกรุ่นคอมเพรสเซอร์หน้างาน:",
     list(MYCOM_OIL_REJECTION_DB.keys()),
     on_change=reset_calculation
 )
 
-# ดึงค่าโหลดความร้อนน้ำมันออกจากฐานข้อมูลอัตโนมัติ
-q_oil_kw = MYCOM_OIL_REJECTION_DB[selected_model]
+# ดึงค่าเริ่มต้น (Default) จากฐานข้อมูลประจำรุ่นมารองรับไว้ก่อน
+q_oil_kw_default = MYCOM_OIL_REJECTION_DB[selected_model]
 
-# แสดงค่าที่ดึงมาให้ผู้ใช้งานรับทราบเพื่อรีเช็คสเปก
-st.info(f"📋 **ข้อมูลจากคู่มือ:** รุ่น {selected_model} มีค่า **Detail Oil Heat Rejection = {q_oil_kw:.1f} kW**")
+# เปิดกล่องรับข้อมูลให้ผู้ใช้งานแก้ไขตัวเลขตามความจริงของสภาวะ Te/Tc ได้เลยเพื่อความแม่นยำ 100%
+q_oil_kw = st.number_input(
+    f"Detail Oil Heat Rejection ของรุ่น {selected_model} (kW):",
+    min_value=5.0,
+    max_value=1500.0,
+    value=float(q_oil_kw_default),
+    step=1.0,
+    help="ระบบใส่ค่าแนะนำเฉลี่ยให้เบื้องต้น แนะนำให้ตรวจสอบกับโปรแกรม MYCOMW ตามสภาวะดีไซน์จริง แล้วนำมาป้อนลงช่องนี้เพื่อความแม่นยำสูงสุด",
+    on_change=reset_calculation
+)
 
 loc_return_port = st.selectbox(
     "พอร์ตที่ไอสารทำความเย็นจากชุด Oil Cooler วิ่งกลับเข้าคอมเพรสเซอร์:",
@@ -159,11 +191,9 @@ st.markdown("---")
 # 🔘 ส่วนที่ 3: สัมประสิทธิ์ทางเทอร์โมไดนามิกส์ (ระบบคำนวณอัตโนมัติ)
 st.subheader("🧪 3. คุณสมบัติสารทำความเย็น (Fluid Properties)")
 
-# คำนวณค่าเฉพาะเจาะจงหนาแน่นสารทำความเย็นตามจริงหน้างาน
 Y = nh3_liquid_density(Cond_temp)
 
 if "ECO Port" in loc_return_port:
-    # หากต่อพอร์ตประหยัดพลังงาน แรงดันจุดเดือดภายในวาล์วจะอยู่ที่ค่าเฉลี่ยกึ่งกลางระบบ
     loc_evap_t = (Cond_temp + Evap_temp) / 2.0
     S = nh3_liquid_density(loc_evap_t)
 else:
@@ -185,25 +215,21 @@ if st.button("🚀 CALCULATE VALVE SIZING", type="primary", use_container_width=
 # --- ประมวลผลลัพธ์วิศวกรรมหลังกดปุ่ม ---
 if st.session_state.calculated:
     
-    # 🧮 คำนวณหาค่า G อัตโนมัติจากโหลดความร้อนน้ำมัน (Oil Heat Rejection)
-    # 1. ค้นหาค่า Enthalpy ของเหลวจาก Condenser (h_f @ Tc)
+    # 🧮 คำนวณหาค่า G ตามพลังงานความร้อนที่ผู้ใช้กำหนด (ผันแปรตามสภาวะ Te/Tc)
     h_f_in = 200.0 + 4.63 * Cond_temp + 0.0025 * (Cond_temp ** 2)
     
-    # 2. ค้นหาค่า Enthalpy ไออิ่มตัวตามจุดส่งกลับ (h_g)
     if "ECO Port" in loc_return_port:
         t_loc_evap = (Cond_temp + Evap_temp) / 2.0
         h_g_out = 1461.9 + 1.05 * t_loc_evap - 0.0085 * (t_loc_evap ** 2)
     else:
         h_g_out = 1461.9 + 1.05 * Evap_temp - 0.0085 * (Evap_temp ** 2)
         
-    # 3. คำนวณความแตกต่างเอนทัลปี และแปลงค่าออกเป็น G (kg/hr)
     dh_loc = h_g_out - h_f_in
     if dh_loc > 0:
         G = (q_oil_kw / dh_loc) * 3600
     else:
         G = 0.0
 
-    # แปลงแรงดันสัมบูรณ์เพื่อใช้คำนวณสูตรหลัก Cv
     if input_mode == "วิธีที่ 1: ป้อนด้วยความดันเกจโดยตรง (HP / LP)":
         if unit == "PSI":
             HP = (HP_input + ATM_PSI) / 14.5038
@@ -215,7 +241,6 @@ if st.session_state.calculated:
         HP = nh3_temp_to_bar_abs(Cond_temp)
         LP = nh3_temp_to_bar_abs(Evap_temp)
 
-    # ตรวจสอบความถูกต้องทางวิศวกรรมป้องกันระบบแครช
     if G <= 0:
         st.error("❌ ข้อผิดพลาด: ค่าความร้อนหรืออุณหภูมิระบบไม่ถูกต้อง ไม่สามารถหาค่าอัตราการไหลได้")
         st.session_state.calculated = False
@@ -225,7 +250,7 @@ if st.session_state.calculated:
     else:
         display_dp = (HP - LP) * 14.5038 if unit == "PSI" else (HP - LP)
         
-        # 📝 สูตรวิศวกรรมหลักในการหาค่า Cv ของวาล์วหรี่น้ำยา
+        # สูตรวิศวกรรมหลักในการหาค่า Cv ของวาล์วหรี่น้ำยา
         part_1 = 1.17 * (G / (1000 * Y))
         part_2 = math.sqrt(S / (HP - LP))
         cv_result = part_1 * part_2 * K
@@ -238,7 +263,7 @@ if st.session_state.calculated:
         
         hp_g_show = (HP * 14.5038) - ATM_PSI if unit == "PSI" else HP - ATM_BAR
         lp_g_show = (LP * 14.5038) - ATM_PSI if unit == "PSI" else LP - ATM_BAR
-        st.info(f"💡 **ผลลัพธ์จากการแปลงข้อมูลอัตโนมัติ:** อัตราการไหลไอสารหล่อเย็นน้ำมัน G = **{G:.2f} kg/hr**")
+        st.info(f"💡 **ผลลัพธ์การประมวลผล:** โหลดน้ำมัน **{q_oil_kw:.1f} kW** -> แปลงเป็นอัตราไหลแอมโมเนียหล่อเย็น G = **{G:.2f} kg/hr**")
 
         # --- ค้นหาชุด Orifice แนะนำ 5 ลำดับแรก ---
         all_options = []
@@ -314,7 +339,7 @@ if st.session_state.calculated:
         log_content = (
             f"=== บันทึกรายงานการคัดเลือกขนาดวาล์ว Yosaku ({current_time}) ===\n"
             f"รุ่นคอมเพรสเซอร์ MYCOM ที่เลือก: {selected_model}\n"
-            f"ค่า Detail Oil Heat Rejection อัตโนมัติ: {q_oil_kw:.1f} kW\n"
+            f"ค่า Detail Oil Heat Rejection ที่ใช้จริง: {q_oil_kw:.1f} kW\n"
             f"พอร์ตส่งไอกลับคอมเพรสเซอร์: {loc_return_port}\n"
             f"คำนวณอัตราการไหลน้ำยาแอมโมเนียได้ (G): {G:.2f} kg/h\n"
             f"สภาวะแรงดันควบคุม: HP={hp_g_show:.3f} {p_label}, LP={lp_g_show:.3f} {p_label}\n"
@@ -326,7 +351,7 @@ if st.session_state.calculated:
         st.download_button(
             label="📥 ดาวน์โหลดรายงานเทคนิค (Technical Spec Log)",
             data=log_content,
-            file_name=f"Yosaku_OilCooler_{selected_model}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
+            file_name=f"Yosaku_OilCooler_{selected_model.replace(' ', '_').replace('-', '_')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
             mime="text/plain",
             use_container_width=True
         )
