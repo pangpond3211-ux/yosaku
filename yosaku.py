@@ -6,12 +6,11 @@ from datetime import datetime
 import os
 
 # ========================================================
-# [CONFIG] ตั้งค่าความดันบรรยากาศอ้างอิงของบริษัท (หน้างาน)
+# [CONFIG] ค่าความดันบรรยากาศอ้างอิง
 # ========================================================
-ATM_BAR = 1.013    # มาตรฐานทั่วไปใช้ 1.013 Bar
-ATM_PSI = 14.70    # มาตรฐานฝั่ง PSI
+ATM_BAR = 1.013    
+ATM_PSI = 14.70    
 
-# ตั้งค่าหน้าตาของ Web App
 st.set_page_config(
     page_title="Yosaku Selection",
     page_icon="👨‍🔧",
@@ -19,14 +18,12 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# ข้อมูลตาราง Orifice มาตรฐาน
 ORIFICE_DATA = [
     ("JA", 0.04), ("JB", 0.08), ("JBC", 0.11), 
     ("JC", 0.14), ("JD", 0.22), ("JE", 0.30), 
     ("JF", 0.35), ("JG", 0.41), ("JH", 0.48)
 ]
 
-# สไตล์สีสำหรับตารางสถานะ
 COLOR_MAP = {
     "เล็กเกินไป": "background-color: #ffcccc; color: #cc0000;",
     "เหมาะสม": "background-color: #d4edda; color: #155724; font-weight: bold;",
@@ -38,7 +35,6 @@ if "calculated" not in st.session_state:
     st.session_state.calculated = False
 
 def reset_calculation():
-    """ฟังก์ชันสำหรับสั่งให้ซ่อนผลลัพธ์ทันทีเมื่อมีการเปลี่ยนอินพุต"""
     st.session_state.calculated = False
 
 def get_suitability_score(pct, is_single):
@@ -64,16 +60,13 @@ def color_matrix_cells(val):
     elif 85 < val <= 100: return "background-color: #fff3cd; color: #856404;"
     else: return "background-color: #ffffff; color: #6c757d;"
 
-# 🧪 ฟังก์ชันแปลงอุณหภูมิอิ่มตัว R717 (°C) -> ความดันสัมบูรณ์ (Bar Absolute) 
-# ปรับปรุงสัมประสิทธิ์ตามมาตรฐาน NIST สำหรับ Ammonia (R717) เพื่อให้ตรงกับเกจหน้างานเป๊ะๆ
+# 🧪 ฟังก์ชันแปลงอุณหภูมิอิ่มตัว R717 -> ความดันสัมบูรณ์ (Bar Absolute)
+# ปรับพิกัดสมการให้ตรงตามตารางสารทำความเย็นหน้างานเป๊ะๆ (38°C = 14.70 Bar A / -10°C = 2.91 Bar A)
 def nh3_temp_to_bar_abs(t_c):
-    T_k = t_c + 273.15  # แปลงเป็นหน่วย Kelvin
-    
-    # สัมประสิทธิ์อ้างอิงมาตรฐานสากล (NIST) สำหรับสาร R717
-    A = 4.68313
-    B = 926.332
-    C = -26.987
-    
+    T_k = t_c + 273.15
+    A = 4.56940
+    B = 953.09342
+    C = -31.00000
     try:
         p_bar = 10 ** (A - (B / (T_k + C)))
         return p_bar
@@ -95,15 +88,6 @@ st.caption("⚙️ Mayekawa (Thailand) Co., Ltd.")
 st.markdown("### 📊 สมการอ้างอิงการคำนวณ (Formula)")
 st.latex(r"C_v = 1.17 \times \left( \frac{G}{1000 \times Y} \right) \times \sqrt{\frac{S}{HP - LP}} \times K")
 
-st.markdown("""
-**ความหมายตัวแปรตามมาตรฐานระบบ:**
-* **G (Ref. flow rate):** อัตราการไหลของสารทำความเย็น (หน่วย kg/hr)
-* **Y (Specific weight before valve):** ค่า Specific weight ของสารทำความเย็นก่อนเข้าวาล์ว
-* **S (Specific weight after valve):** ค่า Specific weight ของสารทำความเย็นหลังออกจากวาล์ว
-* **HP - LP (Pressure Drop):** ผลต่างความดันขาเข้าและขาออก (หน่วย Bar)
-* **K:** ค่าปรับแก้ (K Factor)
-""")
-
 st.markdown("---")
 
 st.subheader("📋 กรอกข้อมูลคุณสมบัติระบบ")
@@ -119,35 +103,31 @@ st.markdown("---")
 
 input_mode = st.radio(
     "เลือกวิธีระบุสภาวะความดัน:",
-    ["วิธีที่ 1: ป้อนด้วยความดันเกจโดยตรง (HP / LP)", "วิธีที่ 2: ป้อนด้วยอุณหภูมิแอมโมเนีย (Tc / Te)"],
+    ["วิธีที่ 1: ป้อนด้วยความดันสัมบูรณ์โดยตรง (HP / LP)", "วิธีที่ 2: ป้อนด้วยอุณหภูมิแอมโมเนีย (Tc / Te)"],
     horizontal=False,
     on_change=reset_calculation
 )
 
-unit = st.radio("เลือกหน่วยความดันแสดงผล:", ["Bar", "PSI"], horizontal=True, on_change=reset_calculation)
+unit = st.radio("เลือกหน่วยความดันแสดงผลหลัก:", ["Bar", "PSI"], horizontal=True, on_change=reset_calculation)
 
-p_label = "Bar G" if unit == "Bar" else "PSI G"
-min_p = -ATM_BAR if unit == "Bar" else -ATM_PSI
+p_label = "Bar Abs" if unit == "Bar" else "PSI Abs"
 p_step = 0.001 if unit == "Bar" else 0.1
 
-# คำนวณค่าเริ่มต้นความดันเกจให้สอดคล้องกับอุณหภูมิมาตรฐานห้องเย็น (Tc=38, Te=-10)
-abs_hp_init = nh3_temp_to_bar_abs(38.0)
-abs_lp_init = nh3_temp_to_bar_abs(-10.0)
-
+# ตั้งค่า Default โหมดแรงดันสัมบูรณ์ให้ตรงตามโจทย์ของพี่เป๊ะๆ
 if unit == "PSI":
-    hp_default = (abs_hp_init * 14.5038) - ATM_PSI
-    lp_default = (abs_lp_init * 14.5038) - ATM_PSI
+    hp_default = 14.70 * 14.5038
+    lp_default = 2.91 * 14.5038
 else:
-    hp_default = abs_hp_init - ATM_BAR
-    lp_default = abs_lp_init - ATM_BAR
+    hp_default = 14.700
+    lp_default = 2.910
 
 col1, col2 = st.columns(2)
 
-if input_mode == "วิธีที่ 1: ป้อนด้วยความดันเกจโดยตรง (HP / LP)":
+if input_mode == "วิธีที่ 1: ป้อนด้วยความดันสัมบูรณ์โดยตรง (HP / LP)":
     with col1:
-        HP_input = st.number_input(f"ความดันขาเข้า HP ({p_label}):", min_value=float(min_p), value=float(hp_default), step=p_step, format="%.3f", on_change=reset_calculation)
+        HP_input = st.number_input(f"ความดันขาเข้า HP ({p_label}):", min_value=0.001, value=float(hp_default), step=p_step, format="%.3f", on_change=reset_calculation)
     with col2:
-        LP_input = st.number_input(f"ความดันขาออก LP ({p_label}):", min_value=float(min_p), value=float(lp_default), step=p_step, format="%.3f", on_change=reset_calculation)
+        LP_input = st.number_input(f"ความดันขาออก LP ({p_label}):", min_value=0.001, value=float(lp_default), step=p_step, format="%.3f", on_change=reset_calculation)
 else:
     with col1:
         Cond_temp = st.number_input("อุณหภูมิควบแน่น Condensing Temp Tc (°C):", min_value=-50.0, max_value=60.0, value=38.0, step=1.0, on_change=reset_calculation)
@@ -159,25 +139,21 @@ if st.button("🚀 CALCULATE", type="primary", use_container_width=True):
 
 # --- ส่วนการคำนวณและแสดงผลลัพธ์ ---
 if st.session_state.calculated:
-    # ฐานการคำนวณจะถูกแปลงเป็น Bar Absolute เสมอเพื่อความแม่นยำของระบบรากที่สอง
-    if input_mode == "วิธีที่ 1: ป้อนด้วยความดันเกจโดยตรง (HP / LP)":
+    # ดึงค่าแรงดันสัมบูรณ์ (Bar Absolute) เข้าสู่ศูนย์กลางการคำนวณ
+    if input_mode == "วิธีที่ 1: ป้อนด้วยความดันสัมบูรณ์โดยตรง (HP / LP)":
         if unit == "PSI":
-            HP = (HP_input + ATM_PSI) / 14.5038
-            LP = (LP_input + ATM_PSI) / 14.5038
+            HP = HP_input / 14.5038
+            LP = LP_input / 14.5038
         else:
-            HP = HP_input + ATM_BAR
-            LP = LP_input + ATM_BAR
+            HP = HP_input
+            LP = LP_input
     else:
         HP = nh3_temp_to_bar_abs(Cond_temp)
         LP = nh3_temp_to_bar_abs(Evap_temp)
 
-    # แปลงค่ากลับเป็นรูปเกจ (Gauge) เพื่อโชว์ในสัญลักษณ์รายงานและระบบ Log
-    if unit == "PSI":
-        hp_g_show = (HP * 14.5038) - ATM_PSI
-        lp_g_show = (LP * 14.5038) - ATM_PSI
-    else:
-        hp_g_show = HP - ATM_BAR
-        lp_g_show = LP - ATM_BAR
+    # คำนวณค่าแรงดันฝั่ง Gauge เผื่อไว้แสดงผลใน Log และ Info เพิ่มเติมตามระบบหน้างาน
+    hp_gauge = HP - ATM_BAR
+    lp_gauge = LP - ATM_BAR
 
     if G <= 0:
         st.warning("⚠️ กรุณากรอกอัตราไหลสารทำความเย็น G ให้มากกว่า 0")
@@ -188,6 +164,7 @@ if st.session_state.calculated:
     else:
         display_dp = (HP - LP) * 14.5038 if unit == "PSI" else (HP - LP)
         
+        # สมการหลักใช้ Bar Absolute
         part_1 = 1.17 * (G / (1000 * Y))
         part_2 = math.sqrt(S / (HP - LP))
         cv_result = part_1 * part_2 * K
@@ -197,7 +174,8 @@ if st.session_state.calculated:
         res_col1.metric("Pressure Drop", f"{display_dp:.3f} {unit}")
         res_col2.metric("ผลรวมค่า CV ที่คำนวณได้", f"{cv_result:.4f}")
         
-        st.info(f"💡 **สภาวะในระบบ:** G = {G} kg/hr | HP = {hp_g_show:.3f} {p_label} | LP = {lp_g_show:.3f} {p_label} (Y={Y}, S={S})")
+        st.info(f"💡 **สรุปสภาวะสัมบูรณ์ (Abs):** HP = {HP:.2f} Bar A | LP = {LP:.2f} Bar A  \n"
+                f"🔧 **เทียบเท่าแรงดันเกจ (Gauge):** HP = {hp_gauge:.2f} Bar G | LP = {lp_gauge:.2f} Bar G")
 
         # --- 1. คำนวณหา Top 5 ทางเลือกที่ดีที่สุด ---
         all_options = []
@@ -259,8 +237,6 @@ if st.session_state.calculated:
 
         # --- 3. สร้างตารางที่ 3: เมทริกซ์การคละรุ่น ---
         st.subheader("🗺️ ตารางวิเคราะห์เปอร์เซ็นต์เปิดรวม แบบจับคู่คละรุ่น 2 ตัว")
-        st.caption("📱 *สำหรับผู้ใช้งานมือถือ: สามารถใช้นิ้วปัดขวาที่ตัวตารางเพื่อเลื่อนดู Orifice รุ่นอื่น ๆ ได้*")
-        
         matrix_dict = {}
         for name1, cv1 in ORIFICE_DATA:
             matrix_dict[name1] = {}
@@ -282,9 +258,9 @@ if st.session_state.calculated:
         log_content = (
             f"=== บันทึกเมื่อ {current_time} ===\n"
             f"วิธีป้อนข้อมูล: {input_mode}\n"
-            f"Ref. flow rate G: {G} kg/h (Suction from Compressor)\n"
-            f"ความดันที่แสดงผล (Gauge): HP={hp_g_show:.3f} {p_label}, LP={lp_g_show:.3f} {p_label}\n"
-            f"ความดันคำนวณจริงเบื้องหลัง (Absolute): HP={HP:.3f} Bar A, LP={LP:.3f} Bar A\n"
+            f"Ref. flow rate G: {G} kg/h\n"
+            f"ความดันสัมบูรณ์ (Absolute): HP={HP:.3f} Bar A, LP={LP:.3f} Bar A\n"
+            f"ความดันเกจหน้างาน (Gauge): HP={hp_gauge:.3f} Bar G, LP={lp_gauge:.3f} Bar G\n"
             f"ค่าสัมประสิทธิ์ที่ใช้: Y={Y}, S={S}, K={K}\n"
             f"ผลลัพธ์ค่า CV วาล์วที่คำนวณได้: {cv_result:.4f}\n"
             f"--- ทางเลือกที่เหมาะสมที่สุด (Top 5) ---\n"
