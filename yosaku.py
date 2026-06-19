@@ -8,7 +8,7 @@ import os
 # ========================================================
 # [CONFIG] ตั้งค่าความดันบรรยากาศอ้างอิงของบริษัท (หน้างาน)
 # ========================================================
-ATM_BAR = 1.013    # มาตรฐานทั่วไปใช้ 1.013 Bar (ถ้าหน้างานพี่ใช้ 1.0 ถ้วน สามารถแก้ตรงนี้ได้เลย)
+ATM_BAR = 1.013    # มาตรฐานทั่วไปใช้ 1.013 Bar
 ATM_PSI = 14.70    # มาตรฐานฝั่ง PSI
 
 # ตั้งค่าหน้าตาของ Web App
@@ -34,7 +34,6 @@ COLOR_MAP = {
     "ใหญ่เกินไป": "background-color: #ffffff; color: #6c757d;"
 }
 
-# 🔹 1. ระบบจำสถานะและฟังก์ชันเคลียร์ค่าเมื่ออินพุตเปลี่ยน (Reset Callback)
 if "calculated" not in st.session_state:
     st.session_state.calculated = False
 
@@ -65,13 +64,21 @@ def color_matrix_cells(val):
     elif 85 < val <= 100: return "background-color: #fff3cd; color: #856404;"
     else: return "background-color: #ffffff; color: #6c757d;"
 
-# 🧪 ฟังก์ชันแปลงอุณหภูมิอิ่มตัว R717 (°C) -> ความดันสัมบูรณ์ (Bar Absolute)
+# 🧪 ฟังก์ชันแปลงอุณหภูมิอิ่มตัว R717 (°C) -> ความดันสัมบูรณ์ (Bar Absolute) ด้วย Antoine Equation
 def nh3_temp_to_bar_abs(t_c):
-    return (3.26631702e-08 * t_c**4 + 
-            1.54531857e-05 * t_c**3 + 
-            2.34641900e-03 * t_c**2 + 
-            1.60674845e-01 * t_c + 
-            4.29486480e+00)
+    #แปลงองศาเซลเซียสเป็นเคลวิน
+    T_k = t_c + 273.15
+    # สัมประสิทธิ์ Antoineสำหรับ Ammonia (R717) ช่วงอุณหภูมิใช้งานทั่วไป
+    # P ในหน่วย bar
+    A = 4.86962
+    B = 1101.41
+    C = -26.15
+    
+    try:
+        p_bar = 10 ** (A - (B / (T_k + C)))
+        return p_bar
+    except ZeroDivisionError:
+        return 0.0
 
 # ========================================================
 # ส่วนหัวของโปรแกรม (Header)
@@ -85,7 +92,6 @@ st.title("💻⚙️ Yosaku Selection")
 st.caption("พัฒนาโดย Chattrawat Khamsee | เวอร์ชัน Web App สำหรับมือถือ")
 st.caption("⚙️ Mayekawa (Thailand) Co., Ltd.")
 
-# 📖 ส่วนแสดงสมการหลัก
 st.markdown("### 📊 สมการอ้างอิงการคำนวณ (Formula)")
 st.latex(r"C_v = 1.17 \times \left( \frac{G}{1000 \times Y} \right) \times \sqrt{\frac{S}{HP - LP}} \times K")
 
@@ -100,7 +106,6 @@ st.markdown("""
 
 st.markdown("---")
 
-# 🔘 ส่วนร่วม: ป้อนข้อมูลพื้นฐาน (ใส่ on_change เพื่อตรวจจับการแก้ไขค่า)
 st.subheader("📋 กรอกข้อมูลคุณสมบัติระบบ")
 col_g1, col_g2 = st.columns(2)
 with col_g1:
@@ -112,7 +117,6 @@ with col_g2:
 
 st.markdown("---")
 
-# 🔘 ส่วนเลือกวิธีการป้อนสภาวะความดัน (ใส่ on_change ทั้งโหมดและหน่วย)
 input_mode = st.radio(
     "เลือกวิธีระบุสภาวะความดัน:",
     ["วิธีที่ 1: ป้อนด้วยความดันเกจโดยตรง (HP / LP)", "วิธีที่ 2: ป้อนด้วยอุณหภูมิแอมโมเนีย (Tc / Te)"],
@@ -141,13 +145,11 @@ else:
     with col2:
         Evap_temp = st.number_input("อุณหภูมิระเหย Evaporating Temp Te (°C):", min_value=-50.0, max_value=60.0, value=-10.0, step=1.0, on_change=reset_calculation)
 
-# ปุ่มคำนวณ
 if st.button("🚀 CALCULATE", type="primary", use_container_width=True):
     st.session_state.calculated = True
 
 # --- ส่วนการคำนวณและแสดงผลลัพธ์ ---
 if st.session_state.calculated:
-    # แปลงจาก Gauge ให้เป็น Bar Absolute สำหรับใช้คำนวณในสูตรหลัก
     if input_mode == "วิธีที่ 1: ป้อนด้วยความดันเกจโดยตรง (HP / LP)":
         if unit == "PSI":
             HP = (HP_input + ATM_PSI) / 14.5038
@@ -159,7 +161,6 @@ if st.session_state.calculated:
         HP = nh3_temp_to_bar_abs(Cond_temp)
         LP = nh3_temp_to_bar_abs(Evap_temp)
 
-    # ตรวจสอบความถูกต้องขั้นต้น
     if G <= 0:
         st.warning("⚠️ กรุณากรอกอัตราไหลสารทำความเย็น G ให้มากกว่า 0")
         st.session_state.calculated = False
@@ -169,24 +170,23 @@ if st.session_state.calculated:
     else:
         display_dp = (HP - LP) * 14.5038 if unit == "PSI" else (HP - LP)
         
-        # สูตรหลักคำนวณ Cv
         part_1 = 1.17 * (G / (1000 * Y))
         part_2 = math.sqrt(S / (HP - LP))
         cv_result = part_1 * part_2 * K
 
-        # แสดงผลลัพธ์หลัก
         st.subheader("📊 ผลการคำนวณ")
         res_col1, res_col2 = st.columns(2)
         res_col1.metric("Pressure Drop", f"{display_dp:.3f} {unit}")
         res_col2.metric("ผลรวมค่า CV ที่คำนวณได้", f"{cv_result:.4f}")
         
-        # แสดงค่าแปลงกลับเป็นเกจเพื่อให้ตรวจสอบหน้างานง่าย
         hp_g_show = (HP * 14.5038) - ATM_PSI if unit == "PSI" else HP - ATM_BAR
         lp_g_show = (LP * 14.5038) - ATM_PSI if unit == "PSI" else LP - ATM_BAR
         st.info(f"💡 **สภาวะในระบบ:** G = {G} kg/hr | HP = {hp_g_show:.3f} {p_label} | LP = {lp_g_show:.3f} {p_label} (Y={Y}, S={S})")
 
         # --- 1. คำนวณหา Top 5 ทางเลือกที่ดีที่สุด ---
         all_options = []
+        recommendation_text = ""  # แก้ไข: ประกาศตัวแปรล่วงหน้าเพื่อป้องกันบั๊ก String เคลียร์ค่า
+        
         for name, max_cv in ORIFICE_DATA:
             pct = (cv_result / max_cv) * 100
             score = get_suitability_score(pct, is_single=True)
@@ -205,7 +205,6 @@ if st.session_state.calculated:
         
         st.success("🏆 **ชุดประกอบแนะนำที่ดีที่สุด 5 อันดับแรก (แนะนำที่ 80% - 85%)**")
         if all_options:
-            recommendation_text = ""
             rank_emojis = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣"]
             for i, (score, label) in enumerate(all_options[:5]):
                 emoji = rank_emojis[i] if i < len(rank_emojis) else f"[{i+1}]"
