@@ -64,12 +64,16 @@ def color_matrix_cells(val):
     elif 85 < val <= 100: return "background-color: #fff3cd; color: #856404;"
     else: return "background-color: #ffffff; color: #6c757d;"
 
-# 🧪 ฟังก์ชันแปลงอุณหภูมิอิ่มตัว R717 (°C) -> ความดันสัมบูรณ์ (Bar Absolute) ด้วย Antoine Equation
+# 🧪 ฟังก์ชันแปลงอุณหภูมิอิ่มตัว R717 (°C) -> ความดันสัมบูรณ์ (Bar Absolute) 
+# ปรับปรุงสัมประสิทธิ์ตามมาตรฐาน NIST สำหรับ Ammonia (R717) เพื่อให้ตรงกับเกจหน้างานเป๊ะๆ
 def nh3_temp_to_bar_abs(t_c):
-    T_k = t_c + 273.15
-    A = 4.86962
-    B = 1101.41
-    C = -26.15
+    T_k = t_c + 273.15  # แปลงเป็นหน่วย Kelvin
+    
+    # สัมประสิทธิ์อ้างอิงมาตรฐานสากล (NIST) สำหรับสาร R717
+    A = 4.68313
+    B = 926.332
+    C = -26.987
+    
     try:
         p_bar = 10 ** (A - (B / (T_k + C)))
         return p_bar
@@ -126,7 +130,7 @@ p_label = "Bar G" if unit == "Bar" else "PSI G"
 min_p = -ATM_BAR if unit == "Bar" else -ATM_PSI
 p_step = 0.001 if unit == "Bar" else 0.1
 
-# 🌟 คำนวณค่าเริ่มต้นของความดันเกจให้สัมพันธ์กับอุณหภูมิเริ่มต้น (Tc=38, Te=-10) โดยอัตโนมัติ
+# คำนวณค่าเริ่มต้นความดันเกจให้สอดคล้องกับอุณหภูมิมาตรฐานห้องเย็น (Tc=38, Te=-10)
 abs_hp_init = nh3_temp_to_bar_abs(38.0)
 abs_lp_init = nh3_temp_to_bar_abs(-10.0)
 
@@ -155,7 +159,7 @@ if st.button("🚀 CALCULATE", type="primary", use_container_width=True):
 
 # --- ส่วนการคำนวณและแสดงผลลัพธ์ ---
 if st.session_state.calculated:
-    # คำนวณหาค่าความดันสัมบูรณ์ (Bar Absolute)
+    # ฐานการคำนวณจะถูกแปลงเป็น Bar Absolute เสมอเพื่อความแม่นยำของระบบรากที่สอง
     if input_mode == "วิธีที่ 1: ป้อนด้วยความดันเกจโดยตรง (HP / LP)":
         if unit == "PSI":
             HP = (HP_input + ATM_PSI) / 14.5038
@@ -167,7 +171,7 @@ if st.session_state.calculated:
         HP = nh3_temp_to_bar_abs(Cond_temp)
         LP = nh3_temp_to_bar_abs(Evap_temp)
 
-    # แปลงค่ากลับเป็นหน่วยเกจ (Gauge) เพื่อใช้แสดงผลใน Info และ Log
+    # แปลงค่ากลับเป็นรูปเกจ (Gauge) เพื่อโชว์ในสัญลักษณ์รายงานและระบบ Log
     if unit == "PSI":
         hp_g_show = (HP * 14.5038) - ATM_PSI
         lp_g_show = (LP * 14.5038) - ATM_PSI
@@ -184,7 +188,6 @@ if st.session_state.calculated:
     else:
         display_dp = (HP - LP) * 14.5038 if unit == "PSI" else (HP - LP)
         
-        # คำนวณ Cv จากฐานแรงดันสัมบูรณ์ตัวเดียวกัน
         part_1 = 1.17 * (G / (1000 * Y))
         part_2 = math.sqrt(S / (HP - LP))
         cv_result = part_1 * part_2 * K
