@@ -124,9 +124,18 @@ unit = st.radio("เลือกหน่วยความดันแสดง
 
 p_label = "Bar G" if unit == "Bar" else "PSI G"
 min_p = -ATM_BAR if unit == "Bar" else -ATM_PSI
-hp_default = (14.7 - ATM_BAR) if unit == "Bar" else 0.0
-lp_default = (2.91 - ATM_BAR) if unit == "Bar" else -11.79
 p_step = 0.001 if unit == "Bar" else 0.1
+
+# 🌟 คำนวณค่าเริ่มต้นของความดันเกจให้สัมพันธ์กับอุณหภูมิเริ่มต้น (Tc=38, Te=-10) โดยอัตโนมัติ
+abs_hp_init = nh3_temp_to_bar_abs(38.0)
+abs_lp_init = nh3_temp_to_bar_abs(-10.0)
+
+if unit == "PSI":
+    hp_default = (abs_hp_init * 14.5038) - ATM_PSI
+    lp_default = (abs_lp_init * 14.5038) - ATM_PSI
+else:
+    hp_default = abs_hp_init - ATM_BAR
+    lp_default = abs_lp_init - ATM_BAR
 
 col1, col2 = st.columns(2)
 
@@ -146,7 +155,7 @@ if st.button("🚀 CALCULATE", type="primary", use_container_width=True):
 
 # --- ส่วนการคำนวณและแสดงผลลัพธ์ ---
 if st.session_state.calculated:
-    # 🌟 STEP 1: คำนวณหาค่าความดันสัมบูรณ์ (Bar Absolute) เพื่อใช้ในสมการหลักเบื้องหลัง
+    # คำนวณหาค่าความดันสัมบูรณ์ (Bar Absolute)
     if input_mode == "วิธีที่ 1: ป้อนด้วยความดันเกจโดยตรง (HP / LP)":
         if unit == "PSI":
             HP = (HP_input + ATM_PSI) / 14.5038
@@ -158,7 +167,7 @@ if st.session_state.calculated:
         HP = nh3_temp_to_bar_abs(Cond_temp)
         LP = nh3_temp_to_bar_abs(Evap_temp)
 
-    # 🌟 STEP 2: แปลงค่าเป็นความดันเกจ (Gauge) ตามหน่วยที่เลือก เพื่อใช้แสดงผลและทำ Log
+    # แปลงค่ากลับเป็นหน่วยเกจ (Gauge) เพื่อใช้แสดงผลใน Info และ Log
     if unit == "PSI":
         hp_g_show = (HP * 14.5038) - ATM_PSI
         lp_g_show = (LP * 14.5038) - ATM_PSI
@@ -166,7 +175,6 @@ if st.session_state.calculated:
         hp_g_show = HP - ATM_BAR
         lp_g_show = LP - ATM_BAR
 
-    # ตรวจสอบเงื่อนไขระบบ
     if G <= 0:
         st.warning("⚠️ กรุณากรอกอัตราไหลสารทำความเย็น G ให้มากกว่า 0")
         st.session_state.calculated = False
@@ -176,7 +184,7 @@ if st.session_state.calculated:
     else:
         display_dp = (HP - LP) * 14.5038 if unit == "PSI" else (HP - LP)
         
-        # คำนวณค่า Cv ด้วยความดันสัมบูรณ์
+        # คำนวณ Cv จากฐานแรงดันสัมบูรณ์ตัวเดียวกัน
         part_1 = 1.17 * (G / (1000 * Y))
         part_2 = math.sqrt(S / (HP - LP))
         cv_result = part_1 * part_2 * K
@@ -186,7 +194,6 @@ if st.session_state.calculated:
         res_col1.metric("Pressure Drop", f"{display_dp:.3f} {unit}")
         res_col2.metric("ผลรวมค่า CV ที่คำนวณได้", f"{cv_result:.4f}")
         
-        # แสดงค่าสภาวะเป็นหน่วยเกจ (Gauge) เสมอตามที่พี่ต้องการ
         st.info(f"💡 **สภาวะในระบบ:** G = {G} kg/hr | HP = {hp_g_show:.3f} {p_label} | LP = {lp_g_show:.3f} {p_label} (Y={Y}, S={S})")
 
         # --- 1. คำนวณหา Top 5 ทางเลือกที่ดีที่สุด ---
