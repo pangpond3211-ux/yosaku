@@ -61,7 +61,6 @@ def color_matrix_cells(val):
     else: return "background-color: #ffffff; color: #6c757d;"
 
 # 🧪 ฟังก์ชันแปลงอุณหภูมิอิ่มตัว R717 -> ความดันสัมบูรณ์ (Bar Absolute)
-# ปรับพิกัดสมการให้ตรงตามตารางสารทำความเย็นหน้างานเป๊ะๆ (38°C = 14.70 Bar A / -10°C = 2.91 Bar A)
 def nh3_temp_to_bar_abs(t_c):
     T_k = t_c + 273.15
     A = 4.56940
@@ -113,13 +112,14 @@ unit = st.radio("เลือกหน่วยความดันแสดง
 p_label = "Bar Abs" if unit == "Bar" else "PSI Abs"
 p_step = 0.001 if unit == "Bar" else 0.1
 
-# ตั้งค่า Default โหมดแรงดันสัมบูรณ์ให้ตรงตามโจทย์ของพี่เป๊ะๆ
+# ตั้งค่า Default เริ่มต้นของหน้าจอให้ตรงกัน
 if unit == "PSI":
     hp_default = 14.70 * 14.5038
-    lp_default = 2.91 * 14.5038
+    # คำนวณค่าเริ่มต้นของ LP แบบคูณตัวแปรพิเศษ 1.21^1.3 เผื่อไว้ให้สัมพันธ์กันตอนเปิดแอป
+    lp_default = (nh3_temp_to_bar_abs(-10.0) * (1.21 ** 1.3)) * 14.5038
 else:
     hp_default = 14.700
-    lp_default = 2.910
+    lp_default = nh3_temp_to_bar_abs(-10.0) * (1.21 ** 1.3)
 
 col1, col2 = st.columns(2)
 
@@ -139,7 +139,6 @@ if st.button("🚀 CALCULATE", type="primary", use_container_width=True):
 
 # --- ส่วนการคำนวณและแสดงผลลัพธ์ ---
 if st.session_state.calculated:
-    # ดึงค่าแรงดันสัมบูรณ์ (Bar Absolute) เข้าสู่ศูนย์กลางการคำนวณ
     if input_mode == "วิธีที่ 1: ป้อนด้วยความดันสัมบูรณ์โดยตรง (HP / LP)":
         if unit == "PSI":
             HP = HP_input / 14.5038
@@ -149,9 +148,10 @@ if st.session_state.calculated:
             LP = LP_input
     else:
         HP = nh3_temp_to_bar_abs(Cond_temp)
-        LP = nh3_temp_to_bar_abs(Evap_temp)
+        # 🌟 จุดแก้ไข: แปลง Te เป็นแรงดันสัมบูรณ์แล้วคูณด้วย 1.21^1.3 ทันที
+        LP = nh3_temp_to_bar_abs(Evap_temp) * (1.21 ** 1.3)
 
-    # คำนวณค่าแรงดันฝั่ง Gauge เผื่อไว้แสดงผลใน Log และ Info เพิ่มเติมตามระบบหน้างาน
+    # คำนวณค่าแรงดันฝั่ง Gauge เผื่อไว้แสดงผลหน้างาน
     hp_gauge = HP - ATM_BAR
     lp_gauge = LP - ATM_BAR
 
@@ -159,12 +159,12 @@ if st.session_state.calculated:
         st.warning("⚠️ กรุณากรอกอัตราไหลสารทำความเย็น G ให้มากกว่า 0")
         st.session_state.calculated = False
     elif HP <= LP:
-        st.error("❌ ข้อผิดพลาด: ความดันขาเข้า (HP) ต้องมากกว่าความดันขาออก (LP)")
+        st.error("❌ ข้อผิดพลาด: ความดันขาเข้า (HP) ต้องมากกว่าความดันขาออก (LP) หลังจากคูณสัมประสิทธิ์ปรับแก้แล้ว")
         st.session_state.calculated = False
     else:
         display_dp = (HP - LP) * 14.5038 if unit == "PSI" else (HP - LP)
         
-        # สมการหลักใช้ Bar Absolute
+        # คำนวณหาค่า CV
         part_1 = 1.17 * (G / (1000 * Y))
         part_2 = math.sqrt(S / (HP - LP))
         cv_result = part_1 * part_2 * K
@@ -174,8 +174,8 @@ if st.session_state.calculated:
         res_col1.metric("Pressure Drop", f"{display_dp:.3f} {unit}")
         res_col2.metric("ผลรวมค่า CV ที่คำนวณได้", f"{cv_result:.4f}")
         
-        st.info(f"💡 **สรุปสภาวะสัมบูรณ์ (Abs):** HP = {HP:.2f} Bar A | LP = {LP:.2f} Bar A  \n"
-                f"🔧 **เทียบเท่าแรงดันเกจ (Gauge):** HP = {hp_gauge:.2f} Bar G | LP = {lp_gauge:.2f} Bar G")
+        st.info(f"💡 **สรุปสภาวะสัมบูรณ์ (Abs):** HP = {HP:.3f} Bar A | LP (ปรับค่าคูณแล้ว) = {LP:.3f} Bar A  \n"
+                f"🔧 **เทียบเท่าแรงดันเกจ (Gauge):** HP = {hp_gauge:.3f} Bar G | LP = {lp_gauge:.3f} Bar G")
 
         # --- 1. คำนวณหา Top 5 ทางเลือกที่ดีที่สุด ---
         all_options = []
@@ -259,7 +259,7 @@ if st.session_state.calculated:
             f"=== บันทึกเมื่อ {current_time} ===\n"
             f"วิธีป้อนข้อมูล: {input_mode}\n"
             f"Ref. flow rate G: {G} kg/h\n"
-            f"ความดันสัมบูรณ์ (Absolute): HP={HP:.3f} Bar A, LP={LP:.3f} Bar A\n"
+            f"ความดันสัมบูรณ์คำนวณจริง (Absolute): HP={HP:.3f} Bar A, LP={LP:.3f} Bar A (คูณ 1.21^1.3 แล้ว)\n"
             f"ความดันเกจหน้างาน (Gauge): HP={hp_gauge:.3f} Bar G, LP={lp_gauge:.3f} Bar G\n"
             f"ค่าสัมประสิทธิ์ที่ใช้: Y={Y}, S={S}, K={K}\n"
             f"ผลลัพธ์ค่า CV วาล์วที่คำนวณได้: {cv_result:.4f}\n"
