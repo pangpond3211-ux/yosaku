@@ -66,14 +66,10 @@ def color_matrix_cells(val):
 
 # 🧪 ฟังก์ชันแปลงอุณหภูมิอิ่มตัว R717 (°C) -> ความดันสัมบูรณ์ (Bar Absolute) ด้วย Antoine Equation
 def nh3_temp_to_bar_abs(t_c):
-    #แปลงองศาเซลเซียสเป็นเคลวิน
     T_k = t_c + 273.15
-    # สัมประสิทธิ์ Antoineสำหรับ Ammonia (R717) ช่วงอุณหภูมิใช้งานทั่วไป
-    # P ในหน่วย bar
     A = 4.86962
     B = 1101.41
     C = -26.15
-    
     try:
         p_bar = 10 ** (A - (B / (T_k + C)))
         return p_bar
@@ -150,6 +146,7 @@ if st.button("🚀 CALCULATE", type="primary", use_container_width=True):
 
 # --- ส่วนการคำนวณและแสดงผลลัพธ์ ---
 if st.session_state.calculated:
+    # 🌟 STEP 1: คำนวณหาค่าความดันสัมบูรณ์ (Bar Absolute) เพื่อใช้ในสมการหลักเบื้องหลัง
     if input_mode == "วิธีที่ 1: ป้อนด้วยความดันเกจโดยตรง (HP / LP)":
         if unit == "PSI":
             HP = (HP_input + ATM_PSI) / 14.5038
@@ -161,6 +158,15 @@ if st.session_state.calculated:
         HP = nh3_temp_to_bar_abs(Cond_temp)
         LP = nh3_temp_to_bar_abs(Evap_temp)
 
+    # 🌟 STEP 2: แปลงค่าเป็นความดันเกจ (Gauge) ตามหน่วยที่เลือก เพื่อใช้แสดงผลและทำ Log
+    if unit == "PSI":
+        hp_g_show = (HP * 14.5038) - ATM_PSI
+        lp_g_show = (LP * 14.5038) - ATM_PSI
+    else:
+        hp_g_show = HP - ATM_BAR
+        lp_g_show = LP - ATM_BAR
+
+    # ตรวจสอบเงื่อนไขระบบ
     if G <= 0:
         st.warning("⚠️ กรุณากรอกอัตราไหลสารทำความเย็น G ให้มากกว่า 0")
         st.session_state.calculated = False
@@ -170,6 +176,7 @@ if st.session_state.calculated:
     else:
         display_dp = (HP - LP) * 14.5038 if unit == "PSI" else (HP - LP)
         
+        # คำนวณค่า Cv ด้วยความดันสัมบูรณ์
         part_1 = 1.17 * (G / (1000 * Y))
         part_2 = math.sqrt(S / (HP - LP))
         cv_result = part_1 * part_2 * K
@@ -179,13 +186,12 @@ if st.session_state.calculated:
         res_col1.metric("Pressure Drop", f"{display_dp:.3f} {unit}")
         res_col2.metric("ผลรวมค่า CV ที่คำนวณได้", f"{cv_result:.4f}")
         
-        hp_g_show = (HP * 14.5038) - ATM_PSI if unit == "PSI" else HP - ATM_BAR
-        lp_g_show = (LP * 14.5038) - ATM_PSI if unit == "PSI" else LP - ATM_BAR
+        # แสดงค่าสภาวะเป็นหน่วยเกจ (Gauge) เสมอตามที่พี่ต้องการ
         st.info(f"💡 **สภาวะในระบบ:** G = {G} kg/hr | HP = {hp_g_show:.3f} {p_label} | LP = {lp_g_show:.3f} {p_label} (Y={Y}, S={S})")
 
         # --- 1. คำนวณหา Top 5 ทางเลือกที่ดีที่สุด ---
         all_options = []
-        recommendation_text = ""  # แก้ไข: ประกาศตัวแปรล่วงหน้าเพื่อป้องกันบั๊ก String เคลียร์ค่า
+        recommendation_text = ""
         
         for name, max_cv in ORIFICE_DATA:
             pct = (cv_result / max_cv) * 100
@@ -267,8 +273,8 @@ if st.session_state.calculated:
             f"=== บันทึกเมื่อ {current_time} ===\n"
             f"วิธีป้อนข้อมูล: {input_mode}\n"
             f"Ref. flow rate G: {G} kg/h (Suction from Compressor)\n"
-            f"ความดันที่ป้อนหน้างาน: HP={hp_g_show:.3f} {p_label}, LP={lp_g_show:.3f} {p_label}\n"
-            f"ความดันคำนวณจริงเบื้องหลัง: HP={HP:.3f} Bar A, LP={LP:.3f} Bar A\n"
+            f"ความดันที่แสดงผล (Gauge): HP={hp_g_show:.3f} {p_label}, LP={lp_g_show:.3f} {p_label}\n"
+            f"ความดันคำนวณจริงเบื้องหลัง (Absolute): HP={HP:.3f} Bar A, LP={LP:.3f} Bar A\n"
             f"ค่าสัมประสิทธิ์ที่ใช้: Y={Y}, S={S}, K={K}\n"
             f"ผลลัพธ์ค่า CV วาล์วที่คำนวณได้: {cv_result:.4f}\n"
             f"--- ทางเลือกที่เหมาะสมที่สุด (Top 5) ---\n"
