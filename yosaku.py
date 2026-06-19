@@ -84,8 +84,19 @@ st.title("💻⚙️ Yosaku Selection")
 st.caption("พัฒนาโดย Chattrawat Khamsee | เวอร์ชัน Web App สำหรับมือถือ")
 st.caption("⚙️ Mayekawa (Thailand) Co., Ltd.")
 
+# 🌟 [ดึงกลับมาแล้ว] ส่วนแสดงสูตรและคำอธิบายตัวแปรตามมาตรฐาน
 st.markdown("### 📊 สมการอ้างอิงการคำนวณ (Formula)")
 st.latex(r"C_v = 1.17 \times \left( \frac{G}{1000 \times Y} \right) \times \sqrt{\frac{S}{HP - LP}} \times K")
+
+st.markdown("""
+**ความหมายตัวแปรตามมาตรฐานระบบ:**
+* **G (Ref. flow rate):** อัตราการไหลของสารทำความเย็น (หน่วย kg/hr)
+* **Y (Specific weight before valve):** ค่า Specific weight ของสารทำความเย็นก่อนเข้าวาล์ว
+* **S (Specific weight after valve):** ค่า Specific weight ของสารทำความเย็นหลังออกจากวาล์ว
+* **HP (Inlet Pressure):** ความดันขาเข้าฝั่งสัมบูรณ์ (Bar Absolute)
+* **LP (Outlet Pressure):** ความดันขาออกฝั่งสัมบูรณ์ (Bar Absolute) *[หมายเหตุ: หากเลือกวิธีป้อนด้วยอุณหภูมิ Te ระบบจะแปลงเป็นแรงดันแล้วคูณด้วย $1.21^{1.3}$ อัตโนมัติ]*
+* **K:** ค่าปรับแก้ (K Factor)
+""")
 
 st.markdown("---")
 
@@ -115,7 +126,6 @@ p_step = 0.001 if unit == "Bar" else 0.1
 # ตั้งค่า Default เริ่มต้นของหน้าจอให้ตรงกัน
 if unit == "PSI":
     hp_default = 14.70 * 14.5038
-    # คำนวณค่าเริ่มต้นของ LP แบบคูณตัวแปรพิเศษ 1.21^1.3 เผื่อไว้ให้สัมพันธ์กันตอนเปิดแอป
     lp_default = (nh3_temp_to_bar_abs(-10.0) * (1.21 ** 1.3)) * 14.5038
 else:
     hp_default = 14.700
@@ -148,7 +158,7 @@ if st.session_state.calculated:
             LP = LP_input
     else:
         HP = nh3_temp_to_bar_abs(Cond_temp)
-        # 🌟 จุดแก้ไข: แปลง Te เป็นแรงดันสัมบูรณ์แล้วคูณด้วย 1.21^1.3 ทันที
+        # แปลง Te เป็นแรงดันสัมบูรณ์แล้วคูณด้วย 1.21^1.3 ทันทีตามสูตรปรับแก้ของพี่
         LP = nh3_temp_to_bar_abs(Evap_temp) * (1.21 ** 1.3)
 
     # คำนวณค่าแรงดันฝั่ง Gauge เผื่อไว้แสดงผลหน้างาน
